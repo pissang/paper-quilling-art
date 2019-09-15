@@ -49,9 +49,10 @@ function createDefaultConfig() {
         layers: []
     };
     // TODO Layer Count
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 10; i++) {
         config.layers.push({
-            color: null
+            color: null,
+            intensity: 1
         });
     }
     return config;
@@ -97,7 +98,7 @@ var app = application.create('#main', {
                     quality: 'high'
                 },
                 screenSpaceReflection: {
-                    enable: false
+                    enable: true
                 }
             }
         });
@@ -231,7 +232,7 @@ var app = application.create('#main', {
         },
 
         updatePaperColors() {
-            let colors = config.layers.map(layer => stringify(layer.color, 'rgb'));
+            let colors = config.layers.map(layer => layer.color.map(channel => channel / 255));
             // this._scrollingPapers.forEach((mesh, idx) => {
             //     let color = lerp((idx / (this._scrollingPapers.length - 1) * 4) % 1, colors);
             //     mesh.material.set('color', color);
@@ -241,14 +242,19 @@ var app = application.create('#main', {
                 let off = 0;
                 let paperCount = this._geometryData.length;
                 for (let idx = 0; idx < paperCount; idx++) {
-                    let color = parse(lerp((idx / (paperCount - 1) * 4) % 1, colors));
-                    color[0] /= 255;
-                    color[1] /= 255;
-                    color[2] /= 255;
+                    let colorPercent =  (idx / (paperCount - 1) * 4) % 1;
+                    let colorIndex = Math.floor(colorPercent * (colors.length - 1));
+                    // let color = parse(lerp(, colors));
+                    let color = colors[colorIndex];
+                    let intensity = config.layers[colorIndex].intensity;
+                    // color[0] /= 255;
+                    // color[1] /= 255;
+                    // color[2] /= 255;
                     for (let k = 0; k < this._geometryData[idx].vertexCount; k++) {
-                        for (let i = 0; i < 4; i++) {
-                            colorValue[off++] = color[i];
+                        for (let i = 0; i < 3; i++) {
+                            colorValue[off++] = color[i] * intensity;
                         }
+                        colorValue[off++] = 1;
                     }
                 }
                 this._paperMesh.geometry.attributes.color.value = colorValue;
@@ -261,10 +267,10 @@ var app = application.create('#main', {
             var self = this;
             function setDetailTexture(detailTexture) {
                 let tiling = [config.paperDetailTiling, config.paperDetailTiling];
-                self._paperMesh.material.set('roughness', 0.8);
+                self._paperMesh.material.set('roughness', 1);
                 self._groundPlane.material.set('diffuseMap', detailTexture);
                 self._paperMesh.material.set('uvRepeat', tiling);
-                self._paperMesh.material.set('roughness', 0.8);
+                self._paperMesh.material.set('roughness', 1);
                 self._groundPlane.material.set('roughness', 1);
                 self._groundPlane.material.set('diffuseMap', detailTexture);
                 self._groundPlane.material.set('uvRepeat', tiling);
@@ -329,6 +335,7 @@ colorGroup.addButton('Random Colors', function () {
 });
 for (var i = 0; i < config.layers.length; i++) {
     colorGroup.addColor(config.layers[i], 'color', { label: 'Color ' + (i + 1), colorMode: 'rgb', onChange: app.methods.updatePaperColors  });
+    colorGroup.addNumberInput(config.layers[i], 'intensity', { label: 'Intensity', onChange: app.methods.updatePaperColors, step: 0.1, min: 0  });
 }
 colorGroup.addButton('Revert Colors', function () {
     var colors = config.layers.map(function (layer) {
