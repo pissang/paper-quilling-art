@@ -44,13 +44,20 @@ function createDefaultConfig() {
         baseColor: [150, 150, 150],
 
         paperDetail: './img/paper-detail.png',
-        paperDetailTiling: 8,
+        paperNormalDetail: './img/paper-normal.jpg',
+
+        paperNormalScale: 1.5,
 
         clusterColors: true,
+
+        colorNumber: 5,
+
+        $colorNumberRange: [1, 10],
+
         layers: []
     };
-    // TODO Layer Count
-    for (var i = 0; i < 10; i++) {
+
+    for (let k = 0; k < 10; k++) {
         config.layers.push({
             color: null,
             intensity: 1
@@ -131,6 +138,7 @@ var app = application.create('#main', {
             shader: shader
         });
         this._groundPlane.scale.set(11, 11, 1);
+        this._groundPlane.geometry.generateTangents();
         this._rootNode.add(this._groundPlane);
 
         app.methods.updateShadow();
@@ -235,6 +243,7 @@ var app = application.create('#main', {
             geo.attributes.normal.value = normalTotal;
             geo.attributes.texcoord0.value = uvTotal;
             geo.indices = indicesTotal;
+            geo.generateTangents();
             geo.updateBoundingBox();
             geo.dirty();
 
@@ -246,6 +255,15 @@ var app = application.create('#main', {
             this._advancedRenderer.render();
         },
 
+        updateColorNumbers() {
+            for (var i = 0; i < config.colorNumber; i++) {
+                config.layers.push({
+                    color: null,
+                    intensity: 1
+                });
+            }
+        },
+
         updatePaperColors() {
             let colors = config.layers.map(layer => layer.color.map(channel => channel / 255));
             // this._scrollingPapers.forEach((mesh, idx) => {
@@ -254,12 +272,12 @@ var app = application.create('#main', {
             // });
             if (this._paperMesh) {
                 if (config.clusterColors) {
-                    clusterColors(this._geometryData, colors.length);
+                    clusterColors(this._geometryData, Math.round(config.colorNumber));
                 }
                 else {
                     this._geometryData.forEach((item, index) => {
                         let colorPercent =  (index / (this._geometryData.length - 1) * 4) % 1;
-                        let colorIndex = Math.floor(colorPercent * (colors.length - 1));
+                        let colorIndex = Math.floor(colorPercent * (Math.round(config.colorNumber) - 1));
                         item.colorIndex = colorIndex;
                     });
                 }
@@ -291,17 +309,22 @@ var app = application.create('#main', {
         changePaperDetailTexture(app) {
             var self = this;
             function setDetailTexture(detailTexture) {
-                let tiling = [config.paperDetailTiling, config.paperDetailTiling];
                 self._paperMesh.material.set('roughness', 1);
-                self._groundPlane.material.set('diffuseMap', detailTexture);
-                self._paperMesh.material.set('uvRepeat', tiling);
-                self._paperMesh.material.set('roughness', 1);
+                self._paperMesh.material.set('diffuseMap', detailTexture);
                 self._groundPlane.material.set('roughness', 1);
                 self._groundPlane.material.set('diffuseMap', detailTexture);
-                self._groundPlane.material.set('uvRepeat', tiling);
+                self._groundPlane.material.set('uvRepeat', [8, 8]);
 
                 self._advancedRenderer.render();
             }
+
+            function setDetailNormalMap(normalTexture) {
+                self._paperMesh.material.set('normalMap', normalTexture);
+                self._paperMesh.material.set('normalScale', config.paperNormalScale);
+                self._groundPlane.material.set('normalMap', normalTexture);
+                self._advancedRenderer.render();
+            }
+
             if (config.paperDetail && config.paperDetail !== 'none') {
                 app.loadTexture(config.paperDetail, {
                     convertToPOT: true
@@ -309,6 +332,15 @@ var app = application.create('#main', {
             }
             else {
                 setDetailTexture(null);
+            }
+
+            if (config.paperNormalDetail && config.paperNormalDetail !== 'none') {
+                app.loadTexture('img/paper-normal.jpg', {
+                    convertToPOT: true
+                }).then(setDetailNormalMap);
+            }
+            else {
+                setDetailNormalMap(null);
             }
         }
     }
@@ -340,7 +372,8 @@ scenePanel.addGroup({ label: 'Generate' })
 
 scenePanel.addGroup({ label: 'Details', enable: false })
     .addCustomComponent(TextureUI, config, 'paperDetail', { label: 'Detail', onChange: app.methods.changePaperDetailTexture })
-    .addNumberInput(config, 'paperDetailTiling', { label: 'Tiling', onChange: app.methods.updatePapers, step: 0.5, min: 0 });
+    .addCustomComponent(TextureUI, config, 'paperNormalDetail', { label: 'Bump', onChange: app.methods.changePaperDetailTexture })
+    .addNumberInput(config, 'paperNormalScale', { label: 'Bump Scale', onChange: app.methods.changePaperDetailTexture, step: 0.1, min: 0 });
 
 
 scenePanel.addGroup({ label: 'Shadow', enable: false })
@@ -353,15 +386,17 @@ scenePanel.addGroup({ label: 'Camera', enable: false })
 
 var colorGroup = scenePanel.addGroup({ label: 'Colors' });
 colorGroup.addColor(config, 'baseColor', { label: 'Base Color', colorMode: 'rgb', onChange: app.methods.updateBaseColor });
-colorGroup.addCheckbox(config, 'clusterColors', { label: 'Cluster Colors', onChange: app.methods.updatePaperColors });
+
 colorGroup.addButton('Random Colors', function () {
     createRandomColors();
     app.methods.updatePaperColors();
     controlKit.update();
 });
+colorGroup.addCheckbox(config, 'clusterColors', { label: 'Cluster Colors', onChange: app.methods.updatePaperColors });
+colorGroup.addSlider(config, 'colorNumber', '$colorNumberRange', { label: 'Vary', onFinish: app.methods.updatePaperColors, step: 1});
 for (var i = 0; i < config.layers.length; i++) {
     colorGroup.addColor(config.layers[i], 'color', { label: 'Color ' + (i + 1), colorMode: 'rgb', onChange: app.methods.updatePaperColors  });
-    colorGroup.addNumberInput(config.layers[i], 'intensity', { label: 'Intensity', onChange: app.methods.updatePaperColors, step: 0.1, min: 0  });
+    // colorGroup.addNumberInput(config.layers[i], 'intensity', { label: 'Intensity', onChange: app.methods.updatePaperColors, step: 0.1, min: 0  });
 }
 colorGroup.addButton('Revert Colors', function () {
     var colors = config.layers.map(function (layer) {
