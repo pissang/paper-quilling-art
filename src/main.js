@@ -8,7 +8,7 @@ import {generateCircle} from './generator/circle';
 import {generatePerlin, perlinSeed} from './generator/perlin';
 import {extrude} from './extrude';
 import debounce from 'lodash.debounce';
-
+import clustering from 'density-clustering';
 
 var brewerMethods = [
     'BrBG', 'PRGn', 'PiYG', 'PuOr', 'RdBu', 'RdGy', 'RdYlBu', 'RdYlGn', 'Spectral',
@@ -46,6 +46,7 @@ function createDefaultConfig() {
         paperDetail: './img/paper-detail.png',
         paperDetailTiling: 8,
 
+        clusterColors: true,
         layers: []
     };
     // TODO Layer Count
@@ -65,6 +66,20 @@ function createRandomColors() {
     });
 };
 
+
+function clusterColors(geometryData, colorCount) {
+    let points = geometryData.map(item => item.centroid.slice());
+    var kmeans = new clustering.KMEANS();
+    var clusters = kmeans.run(points, colorCount);
+
+    for (let i = 0; i < clusters.length; i++) {
+        for (let k = 0; k < clusters[i].length; k++) {
+            geometryData[clusters[i][k]].colorIndex = i;
+        }
+    }
+}
+
+
 var config = createDefaultConfig();
 createRandomColors();
 
@@ -75,8 +90,6 @@ var app = application.create('#main', {
     devicePixelRatio: 1,
 
     init(app) {
-        app.renderer.logDepthBuffer = true;
-
         this._rootNode = new Node();
         app.scene.add(this._rootNode);
 
@@ -189,7 +202,8 @@ var app = application.create('#main', {
             let vertexCount = 0;
             let indicesCount = 0;
             let geo = this._paperMesh.geometry;
-            polylines.forEach(polyline => {
+
+            polylines.forEach((polyline, index) => {
                 // let {indices, position, normal} = extrude(polyline, 1);
                 let {indices, position, normal, uv} = extrudePolyline([polyline], {
                     // TODO Configuration
@@ -197,6 +211,7 @@ var app = application.create('#main', {
                 });
                 geometryData.push({
                     indices, position, normal, uv,
+                    centroid: polyline[0].slice(),  // Use first point as centroid
                     vertexOffset: vertexCount,
                     indicesOffset: indicesCount,
                     vertexCount: position.length / 3
@@ -238,13 +253,23 @@ var app = application.create('#main', {
             //     mesh.material.set('color', color);
             // });
             if (this._paperMesh) {
+                if (config.clusterColors) {
+                    clusterColors(this._geometryData, colors.length);
+                }
+                else {
+                    this._geometryData.forEach((item, index) => {
+                        let colorPercent =  (index / (this._geometryData.length - 1) * 4) % 1;
+                        let colorIndex = Math.floor(colorPercent * (colors.length - 1));
+                        item.colorIndex = colorIndex;
+                    });
+                }
+
                 let colorValue = new Float32Array(this._paperMesh.geometry.vertexCount * 4);
                 let off = 0;
                 let paperCount = this._geometryData.length;
                 for (let idx = 0; idx < paperCount; idx++) {
-                    let colorPercent =  (idx / (paperCount - 1) * 4) % 1;
-                    let colorIndex = Math.floor(colorPercent * (colors.length - 1));
                     // let color = parse(lerp(, colors));
+                    let colorIndex = this._geometryData[idx].colorIndex;
                     let color = colors[colorIndex];
                     let intensity = config.layers[colorIndex].intensity;
                     // color[0] /= 255;
@@ -328,6 +353,7 @@ scenePanel.addGroup({ label: 'Camera', enable: false })
 
 var colorGroup = scenePanel.addGroup({ label: 'Colors' });
 colorGroup.addColor(config, 'baseColor', { label: 'Base Color', colorMode: 'rgb', onChange: app.methods.updateBaseColor });
+colorGroup.addCheckbox(config, 'clusterColors', { label: 'Cluster Colors', onChange: app.methods.updatePaperColors });
 colorGroup.addButton('Random Colors', function () {
     createRandomColors();
     app.methods.updatePaperColors();
