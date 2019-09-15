@@ -1,0 +1,31 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paper Cut Art Generator</title>
+</head>
+<body>
+    <link rel="stylesheet" href="./style/main.css">
+    <div id="loading">
+        <div class="sk-folding-cube">
+            <div class="sk-cube1 sk-cube"></div>
+            <div class="sk-cube2 sk-cube"></div>
+            <div class="sk-cube4 sk-cube"></div>
+            <div class="sk-cube3 sk-cube"></div>
+        </div>
+        <div id="loading-text">LOADING</div>
+    </div>
+    <div id="credits">
+        <a href="https://github.com/pissang/papercut-box-art" target="_blank" class="source">Source Code</a>
+        Built on top of
+            <a href="https://github.com/pissang/claygl" target="_blank">ClayGL</a>,
+            <a href="https://github.com/d3/" target="_blank">D3</a>,
+            <a href="https://github.com/automat/controlkit.js" target="_blank">ControlKit</a>
+    </div>
+    <div id="main"></div>
+    <script src="./lib/controlKit.js"></script>
+    <script src="./lib/FileAPI.js"></script>
+    <link rel="stylesheet" href="./style/controlKit.css">
+    <script src="./dist/bundle.js"></script>
+</body>
+</html>
