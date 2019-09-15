@@ -27,10 +27,10 @@ function createDefaultConfig() {
     var config = {
         seed: Math.random(),
 
-        thickness: 0.04,
+        thickness: 0.01,
         height: 1,
 
-        number: 500,
+        number: 800,
         trail: 100,
         noiseScale: 3,
 
@@ -193,7 +193,7 @@ var app = application.create('#main', {
                 // let {indices, position, normal} = extrude(polyline, 1);
                 let {indices, position, normal, uv} = extrudePolyline([polyline], {
                     // TODO Configuration
-                    lineWidth: config.thickness, depth: config.depth
+                    lineWidth: config.thickness, depth: config.height
                 });
                 geometryData.push({
                     indices, position, normal, uv,
