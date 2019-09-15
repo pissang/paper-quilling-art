@@ -18,12 +18,13 @@
   },
   "homepage": "https://github.com/pissang/paper-scrolling-art#readme",
   "dependencies": {
-    "claygl": "^1.1.1",
+    "claygl": "git+https://github.com/pissang/claygl.git",
     "claygl-advanced-renderer": "git+https://github.com/pissang/claygl-advanced-renderer.git",
     "d3-scale-chromatic": "^1.2.0",
     "geometry-extrude": "^0.1.2",
     "simplex-noise": "^2.4.0",
-    "zrender": "^4.0.3"
+    "zrender": "^4.0.3",
+    "lodash.debounce": "^4.0.8"
   },
   "devDependencies": {
     "text-loader": "0.0.1",

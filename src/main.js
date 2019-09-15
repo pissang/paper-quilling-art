@@ -7,6 +7,7 @@ import {extrudePolyline} from 'geometry-extrude';
 import {generateCircle} from './generator/circle';
 import {generatePerlin, perlinSeed} from './generator/perlin';
 import {extrude} from './extrude';
+import debounce from 'lodash.debounce';
 
 
 var brewerMethods = [
@@ -26,11 +27,12 @@ function createDefaultConfig() {
     var config = {
         seed: Math.random(),
 
-        thickness: 0.02,
+        thickness: 0.04,
         height: 1,
 
         number: 500,
-        noiseScale: 5,
+        trail: 100,
+        noiseScale: 3,
 
         shadowDirection: [0.2, 0.2],
         shadowKernelSize: 16,
@@ -38,6 +40,8 @@ function createDefaultConfig() {
 
         cameraPosition: [0, 0],
         cameraDistance: 10,
+
+        baseColor: [150, 150, 150],
 
         paperDetail: './img/paper-detail.png',
         paperDetailTiling: 8,
@@ -121,6 +125,7 @@ var app = application.create('#main', {
         this._paperMesh;
         app.methods.updateScrollingPapers();
         app.methods.updatePaperColors();
+        app.methods.updateBaseColor();
         app.methods.changePaperDetailTexture(app);
     },
 
@@ -177,7 +182,7 @@ var app = application.create('#main', {
             perlinSeed(config.seed);
             // let polylines = generateCircle([0, 0], 0.1, 10, 0.5);
             let polylines = generatePerlin(
-                [-11, -11], [11, 11], config.number, config.noiseScale
+                [-11, -11], [11, 11], config.number, config.trail, config.noiseScale
             );
             let geometryData = [];
             let vertexCount = 0;
@@ -218,6 +223,11 @@ var app = application.create('#main', {
             geo.dirty();
 
             this._geometryData = geometryData;
+        },
+
+        updateBaseColor() {
+            this._groundPlane.material.set('color', stringify(config.baseColor, 'rgb'));
+            this._advancedRenderer.render();
         },
 
         updatePaperColors() {
@@ -273,10 +283,10 @@ var app = application.create('#main', {
     }
 });
 
-function updateScrollingPapers() {
+var updateScrollingPapers = debounce(function () {
     app.methods.updateScrollingPapers();
     app.methods.updatePaperColors();
-}
+}, 500);
 
 var controlKit = new ControlKit({
     loadAndSave: false,
@@ -286,9 +296,10 @@ var controlKit = new ControlKit({
 var scenePanel = controlKit.addPanel({ label: 'Settings', width: 250 });
 
 scenePanel.addGroup({ label: 'Generate' })
-    .addNumberInput(config, 'thickness', { label: 'Thickness', onChange: updateScrollingPapers, step: 0.001, min: 0.01 })
+    .addNumberInput(config, 'thickness', { label: 'Thickness', onChange: updateScrollingPapers, step: 0.005, min: 0.01 })
     .addNumberInput(config, 'height', { label: 'Height', onChange: updateScrollingPapers, step: 0.1, min: 0.1 })
     .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapers, step: 10, min: 50 })
+    // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapers, step: 5, min: 50 })
     .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapers, step: 1, min: 1 })
     .addButton('Random', function () {
         config.seed = Math.random();
@@ -296,9 +307,10 @@ scenePanel.addGroup({ label: 'Generate' })
         updateScrollingPapers();
     });
 
-scenePanel.addGroup({ label: 'Papers' })
+scenePanel.addGroup({ label: 'Details', enable: false })
     .addCustomComponent(TextureUI, config, 'paperDetail', { label: 'Detail', onChange: app.methods.changePaperDetailTexture })
     .addNumberInput(config, 'paperDetailTiling', { label: 'Tiling', onChange: app.methods.updatePapers, step: 0.5, min: 0 });
+
 
 scenePanel.addGroup({ label: 'Shadow', enable: false })
     .addPad(config, 'shadowDirection', { label: 'Direction', onChange: app.methods.updateShadow })
@@ -308,14 +320,15 @@ scenePanel.addGroup({ label: 'Camera', enable: false })
     .addPad(config, 'cameraPosition', { label: 'Position', onChange: app.methods.updateCamera })
     .addNumberInput(config, 'cameraDistance', { label: 'Distance', onChange: app.methods.updateCamera, step: 0.5, min: 0 });
 
-var colorGroup = scenePanel.addGroup({ label: 'Layer Colors' });
-colorGroup.addButton('Generate Colors', function () {
+var colorGroup = scenePanel.addGroup({ label: 'Colors' });
+colorGroup.addColor(config, 'baseColor', { label: 'Base Color', colorMode: 'rgb', onChange: app.methods.updateBaseColor });
+colorGroup.addButton('Random Colors', function () {
     createRandomColors();
     app.methods.updatePaperColors();
     controlKit.update();
 });
 for (var i = 0; i < config.layers.length; i++) {
-    colorGroup.addColor(config.layers[i], 'color', { label: 'Layer ' + (i + 1), colorMode: 'rgb', onChange: app.methods.updatePaperColors  });
+    colorGroup.addColor(config.layers[i], 'color', { label: 'Color ' + (i + 1), colorMode: 'rgb', onChange: app.methods.updatePaperColors  });
 }
 colorGroup.addButton('Revert Colors', function () {
     var colors = config.layers.map(function (layer) {

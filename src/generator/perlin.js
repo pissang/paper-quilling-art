@@ -15,16 +15,14 @@ function halton(index, base) {
 }
 
 
-function lineGenerator(x, y, min, max, noiseScale) {
-    let width = max[0] - min[0];
-    let height = max[1] - min[1];
+function lineGenerator(x, y, min, max, trail, noiseScale) {
     // let points = new Float32Array(20000);
-    let off = 0;
+    // let off = 0;
     // points[off++] = x;
     // points[off++] = y;
     let points = [[x, y]];
     // https://github.com/wangyasai/Perlin-Noise/blob/gh-pages/js/sketch.js#L97
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < trail; i++) {
         for (let k = 0; k < 10; k++) {
             let angle = perlin2(x / noiseScale, y / noiseScale) * Math.PI * 2 * 40 * noiseScale;
             let vx = Math.cos(angle) / 200;
@@ -44,7 +42,7 @@ function lineGenerator(x, y, min, max, noiseScale) {
     return points;
     // return points.subarray(0, off);
 }
-export function generatePerlin(min, max, number, noiseScale) {
+export function generatePerlin(min, max, number, trail, noiseScale) {
     let polylines = [];
     let width = max[0] - min[0];
     let height = max[1] - min[1];
@@ -54,7 +52,7 @@ export function generatePerlin(min, max, number, noiseScale) {
         // let x = Math.random() * width + min[0];
         // let y = Math.random() * height + min[1];
 
-        let polyline = lineGenerator(x, y, min, max, noiseScale);
+        let polyline = lineGenerator(x, y, min, max, trail, noiseScale);
         if (polyline.length >= 10) {
             polylines.push(polyline);
         }
