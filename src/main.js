@@ -97,9 +97,11 @@ var app = application.create('#main', {
     devicePixelRatio: 1,
 
     init(app) {
+
         this._rootNode = new Node();
         app.scene.add(this._rootNode);
 
+        this._renderer = app.renderer;
         this._advancedRenderer = new ClayAdvancedRenderer(app.renderer, app.scene, app.timeline, {
             temporalSuperSampling: {
                 dynamic: false
@@ -192,15 +194,18 @@ var app = application.create('#main', {
         updateScrollingPapers() {
             if (!this._paperMesh) {
                 this._paperMesh = new Mesh({
-                    material: new Material({ shader })
+                    material: new Material({shader})
                 });
                 this._paperMesh.culling = false;
                 this._paperMesh.material.define('fragment', 'DOUBLE_SIDED');
                 this._paperMesh.material.define('VERTEX_COLOR');
                 this._rootNode.add(this._paperMesh);
-
-                this._paperMesh.geometry = new Geometry();
             }
+            if (this._paperMesh.geometry) {
+                this._paperMesh.geometry.dispose(this._renderer);
+            }
+            this._paperMesh.geometry = new Geometry();
+
             perlinSeed(config.seed);
             // let polylines = generateCircle([0, 0], 0.1, 10, 0.5);
             let polylines = generatePerlin(
@@ -364,6 +369,7 @@ scenePanel.addGroup({ label: 'Generate' })
     .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapers, step: 10, min: 50 })
     // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapers, step: 5, min: 50 })
     .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapers, step: 1, min: 1 })
+    .addCheckbox(config, 'clusterColors', { label: 'Cluster Colors', onChange: app.methods.updatePaperColors })
     .addButton('Random', function () {
         config.seed = Math.random();
 
@@ -392,7 +398,6 @@ colorGroup.addButton('Random Colors', function () {
     app.methods.updatePaperColors();
     controlKit.update();
 });
-colorGroup.addCheckbox(config, 'clusterColors', { label: 'Cluster Colors', onChange: app.methods.updatePaperColors });
 colorGroup.addSlider(config, 'colorNumber', '$colorNumberRange', { label: 'Vary', onFinish: app.methods.updatePaperColors, step: 1});
 for (var i = 0; i < config.layers.length; i++) {
     colorGroup.addColor(config.layers[i], 'color', { label: 'Color ' + (i + 1), colorMode: 'rgb', onChange: app.methods.updatePaperColors  });
