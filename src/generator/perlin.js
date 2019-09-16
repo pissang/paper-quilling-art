@@ -20,6 +20,7 @@ function lineGenerator(x, y, min, max, trail, noiseScale) {
     // let off = 0;
     // points[off++] = x;
     // points[off++] = y;
+    let jitter = Math.random() / 20;
     let points = [[x, y]];
     // https://github.com/wangyasai/Perlin-Noise/blob/gh-pages/js/sketch.js#L97
     for (let i = 0; i < trail; i++) {
@@ -35,7 +36,7 @@ function lineGenerator(x, y, min, max, trail, noiseScale) {
             break;
         }
 
-        points.push([x, y]);
+        points.push([x + jitter, y + jitter]);
         // points[off++] = x;
         // points[off++] = y;
     }
