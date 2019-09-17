@@ -41,7 +41,7 @@ function createDefaultConfig() {
         cameraPosition: [0, 0],
         cameraDistance: 10,
 
-        baseColor: [150, 150, 150],
+        baseColor: [0, 63, 97],
 
         paperDetail: './img/paper-detail.png',
         paperNormalDetail: './img/paper-normal.jpg',
@@ -50,16 +50,25 @@ function createDefaultConfig() {
 
         clusterColors: true,
 
-        colorNumber: 5,
+        colorNumber: 6,
 
-        $colorNumberRange: [1, 10],
+        $colorNumberRange: [1, 7],
 
         layers: []
     };
 
-    for (let k = 0; k < 10; k++) {
+    let initialColors = [
+        [4, 38, 77],
+        [37, 106, 168],
+        [11, 51, 77],
+        [97, 202, 255],
+        [0, 162, 255],
+        [255, 217, 0],
+        [255, 244, 137]
+    ];
+    for (let k = 0; k < 7; k++) {
         config.layers.push({
-            color: null,
+            color: initialColors[k],
             intensity: 1
         });
     }
@@ -88,7 +97,6 @@ function clusterColors(geometryData, colorCount) {
 
 
 var config = createDefaultConfig();
-createRandomColors();
 
 var app = application.create('#main', {
 
@@ -281,8 +289,9 @@ var app = application.create('#main', {
                 }
                 else {
                     this._geometryData.forEach((item, index) => {
-                        let colorPercent =  (index / (this._geometryData.length - 1) * 4) % 1;
-                        let colorIndex = Math.floor(colorPercent * (Math.round(config.colorNumber) - 1));
+                        // let colorPercent = index / (this._geometryData.length - 1);
+                        // let colorIndex = Math.floor(colorPercent * (Math.round(config.colorNumber) - 1));
+                        let colorIndex = index % Math.round(config.colorNumber);
                         item.colorIndex = colorIndex;
                     });
                 }
