@@ -25,8 +25,12 @@ var brewerMethods = [
 
 var shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('clay.standardMR.fragment'));
 
+var CONFIG_SCHEMA_VERSION = 1;
 function createDefaultConfig() {
     var config = {
+
+        version: CONFIG_SCHEMA_VERSION,
+
         seed: Math.random(),
 
         thickness: 0.01,
@@ -98,7 +102,22 @@ function clusterColors(geometryData, colorCount) {
 }
 
 
-var config = createDefaultConfig();
+var config;
+
+try {
+    config = JSON.parse(localStorage.getItem('main-config'));
+    if (!config) {
+        throw new Error('Unkown config');
+    }
+    if (+config.version !== CONFIG_SCHEMA_VERSION) {
+        throw new Error('Config schema changed');
+    }
+    console.log('Restored');
+}
+catch(e) {
+    console.log(e);
+    config = createDefaultConfig();
+}
 
 var undoStates = [
     { config: clone(config) }
@@ -161,6 +180,15 @@ function reset() {
     controlKit.update();
     updateScrollingPapers();
 }
+
+// Auto save
+setInterval(() => {
+    localStorage.setItem('main-config', JSON.stringify(config));
+    // console.log('Saved');
+}, 2000);
+
+
+
 document.getElementById('undo').addEventListener('click', undo);
 document.getElementById('redo').addEventListener('click', redo);
 document.getElementById('reset').addEventListener('click', reset);
