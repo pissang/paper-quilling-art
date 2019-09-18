@@ -4,15 +4,17 @@ import { parse, stringify, lerp } from 'zrender/src/tool/color';
 import TextureUI from './ui/Texture';
 import * as colorBrewer from 'd3-scale-chromatic';
 import {extrudePolyline} from 'geometry-extrude';
-import {generateCircle} from './generator/circle';
+// import {generateCircle} from './generator/circle';
 import {generatePerlin, perlinSeed} from './generator/perlin';
 import {extrude} from './extrude';
 import debounce from 'lodash.debounce';
 import clustering from 'density-clustering';
+import clone from 'lodash.clonedeep';
+import merge from 'lodash.merge';
 
 var brewerMethods = [
-    'BrBG', 'PRGn', 'PiYG', 'PuOr', 'RdBu', 'RdGy', 'RdYlBu', 'RdYlGn', 'Spectral',
-    'Viridis', 'Inferno', 'Magma', 'Plasma', 'Warm', 'Cool', 'Rainbow', 'YlGnBu', 'RdPu', 'PuRd',
+    'BrBG', 'PuOr', 'RdBu', 'RdGy', 'RdYlBu', 'RdYlGn', 'Spectral',
+    'Viridis', 'Inferno', 'Magma', 'Plasma', 'Warm', 'Cool', 'Rainbow', 'PuRd',
 ].map(function (a) {
     return 'interpolate' + a;
 });
@@ -97,6 +99,71 @@ function clusterColors(geometryData, colorCount) {
 
 
 var config = createDefaultConfig();
+
+var undoStates = [
+    { config: clone(config) }
+];
+var redoStates = [];
+
+function undo() {
+    if (undoStates.length < 2) {
+        return;
+    }
+    let currentConfig = undoStates.pop();
+    let lastConfig = undoStates[undoStates.length - 1];
+
+    merge(config, lastConfig.config);
+    redoStates.push(clone({
+        config: currentConfig.config,
+        updateMethod: currentConfig.updateMethod
+    }));
+
+    controlKit.update();
+
+    if (currentConfig.updateMethod) {
+        currentConfig.updateMethod();
+    }
+    else {
+        app.methods.updateScrollingPapers();
+        app.methods.updatePaperColors();
+    }
+}
+
+function redo() {
+    let redoConfig = redoStates.pop();
+    if (redoConfig) {
+        merge(config, redoConfig);
+        redoStates.push({
+            config: clone(redoConfig),
+            updateMethod: redoConfig.updateMethod
+        });
+
+        controlKit.update();
+        updateScrollingPapers();
+    }
+}
+
+const saveStates = debounce(function (updateMethod) {
+    undoStates.push({
+        config: clone(config),
+        updateMethod
+    });
+    if (undoStates.length > 20) {
+        undoStates.shift();
+    }
+    redoStates.length = 0;
+}, 300);
+
+function reset() {
+    let newConfig = createDefaultConfig();
+    merge(config, newConfig);
+
+    controlKit.update();
+    updateScrollingPapers();
+}
+document.getElementById('undo').addEventListener('click', undo);
+document.getElementById('redo').addEventListener('click', redo);
+document.getElementById('reset').addEventListener('click', reset);
 
 var app = application.create('#main', {
 
@@ -268,15 +335,6 @@ var app = application.create('#main', {
             this._advancedRenderer.render();
         },
 
-        updateColorNumbers() {
-            for (var i = 0; i < config.colorNumber; i++) {
-                config.layers.push({
-                    color: null,
-                    intensity: 1
-                });
-            }
-        },
-
         updatePaperColors() {
             let colors = config.layers.map(layer => layer.color.map(channel => channel / 255));
             // this._scrollingPapers.forEach((mesh, idx) => {
@@ -363,7 +421,44 @@ var app = application.create('#main', {
 var updateScrollingPapers = debounce(function () {
     app.methods.updateScrollingPapers();
     app.methods.updatePaperColors();
+
+    saveStates(() => {
+        app.methods.updateScrollingPapers();
+        app.methods.updatePaperColors();
+    });
 }, 500);
+
+function updateBaseColor() {
+    app.methods.updateBaseColor();
+    saveStates(() => {
+        app.methods.updateBaseColor();
+    });
+}
+function updatePaperColors() {
+    app.methods.updatePaperColors();
+    saveStates(() => {
+        app.methods.updatePaperColors();
+    });
+}
+function changePaperDetailTexture() {
+    app.methods.changePaperDetailTexture();
+    saveStates(() => {
+        app.methods.changePaperDetailTexture();
+    });
+}
+function updateShadow() {
+    app.methods.updateShadow();
+    saveStates(() => {
+        app.methods.updateShadow();
+    });
+}
+function updateCamera() {
+    app.methods.updateCamera();
+    saveStates(() => {
+        app.methods.updateCamera();
+    });
+}
+
 
 var controlKit = new ControlKit({
     loadAndSave: false,
@@ -378,7 +473,7 @@ scenePanel.addGroup({ label: 'Generate' })
     .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapers, step: 10, min: 50 })
     // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapers, step: 5, min: 50 })
     .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapers, step: 1, min: 1 })
-    .addCheckbox(config, 'clusterColors', { label: 'Cluster Colors', onChange: app.methods.updatePaperColors })
+    .addCheckbox(config, 'clusterColors', { label: 'Group Color', onChange: updatePaperColors })
     .addButton('Random', function () {
         config.seed = Math.random();
 
@@ -386,31 +481,31 @@ scenePanel.addGroup({ label: 'Generate' })
     });
 
 scenePanel.addGroup({ label: 'Details', enable: false })
-    .addCustomComponent(TextureUI, config, 'paperDetail', { label: 'Detail', onChange: app.methods.changePaperDetailTexture })
-    .addCustomComponent(TextureUI, config, 'paperNormalDetail', { label: 'Bump', onChange: app.methods.changePaperDetailTexture })
-    .addNumberInput(config, 'paperNormalScale', { label: 'Bump Scale', onChange: app.methods.changePaperDetailTexture, step: 0.1, min: 0 });
+    .addCustomComponent(TextureUI, config, 'paperDetail', { label: 'Detail', onChange: changePaperDetailTexture })
+    .addCustomComponent(TextureUI, config, 'paperNormalDetail', { label: 'Bump', onChange: changePaperDetailTexture })
+    .addNumberInput(config, 'paperNormalScale', { label: 'Bump Scale', onChange: changePaperDetailTexture, step: 0.1, min: 0 });
 
 
 scenePanel.addGroup({ label: 'Shadow', enable: false })
-    .addPad(config, 'shadowDirection', { label: 'Direction', onChange: app.methods.updateShadow })
-    .addNumberInput(config, 'shadowBlurSize', { label: 'Blur Size', onChange: app.methods.updateShadow, step: 0.5, min: 0 });
+    .addPad(config, 'shadowDirection', { label: 'Direction', onChange: updateShadow })
+    .addNumberInput(config, 'shadowBlurSize', { label: 'Blur Size', onChange: updateShadow, step: 0.5, min: 0 });
 
 scenePanel.addGroup({ label: 'Camera', enable: false })
-    .addPad(config, 'cameraPosition', { label: 'Position', onChange: app.methods.updateCamera })
-    .addNumberInput(config, 'cameraDistance', { label: 'Distance', onChange: app.methods.updateCamera, step: 0.5, min: 0 });
+    .addPad(config, 'cameraPosition', { label: 'Position', onChange: updateCamera })
+    .addNumberInput(config, 'cameraDistance', { label: 'Distance', onChange: updateCamera, step: 0.5, min: 0 });
 
 var colorGroup = scenePanel.addGroup({ label: 'Colors' });
-colorGroup.addColor(config, 'baseColor', { label: 'Base Color', colorMode: 'rgb', onChange: app.methods.updateBaseColor });
+colorGroup.addColor(config, 'baseColor', { label: 'Base Color', colorMode: 'rgb', onChange: updateBaseColor });
 
 colorGroup.addButton('Random Colors', function () {
     createRandomColors();
-    app.methods.updatePaperColors();
+    updatePaperColors();
     controlKit.update();
 });
-colorGroup.addSlider(config, 'colorNumber', '$colorNumberRange', { label: 'Vary', onFinish: app.methods.updatePaperColors, step: 1});
+colorGroup.addSlider(config, 'colorNumber', '$colorNumberRange', { label: 'Vary', onFinish: updatePaperColors, step: 1});
 for (var i = 0; i < config.layers.length; i++) {
-    colorGroup.addColor(config.layers[i], 'color', { label: 'Color ' + (i + 1), colorMode: 'rgb', onChange: app.methods.updatePaperColors  });
-    // colorGroup.addNumberInput(config.layers[i], 'intensity', { label: 'Intensity', onChange: app.methods.updatePaperColors, step: 0.1, min: 0  });
+    colorGroup.addColor(config.layers[i], 'color', { label: 'Color ' + (i + 1), colorMode: 'rgb', onChange: updatePaperColors  });
+    // colorGroup.addNumberInput(config.layers[i], 'intensity', { label: 'Intensity', onChange: updatePaperColors, step: 0.1, min: 0  });
 }
 colorGroup.addButton('Revert Colors', function () {
     var colors = config.layers.map(function (layer) {
@@ -419,7 +514,7 @@ colorGroup.addButton('Revert Colors', function () {
     config.layers.forEach(function (layer, idx) {
         layer.color = colors[idx];
     });
-    app.methods.updatePaperColors();
+    updatePaperColors();
     controlKit.update();
 });
 
