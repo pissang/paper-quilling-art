@@ -1,5 +1,5 @@
 import ClayAdvancedRenderer from 'claygl-advanced-renderer';
-import { application, Vector3, util, Shader, Node, Geometry, Mesh, Material } from 'claygl';
+import { application, Vector3, util, Shader, Node, Geometry, Mesh, Material, plugin } from 'claygl';
 import { parse, stringify, lerp } from 'zrender/src/tool/color';
 import TextureUI from './ui/Texture';
 import * as colorBrewer from 'd3-scale-chromatic';
@@ -11,6 +11,7 @@ import debounce from 'lodash.debounce';
 import clustering from 'density-clustering';
 import clone from 'lodash.clonedeep';
 import merge from 'lodash.merge';
+import { createTextMaskImage, createMaskImage } from './createMaskImage';
 
 var brewerMethods = [
     'BrBG', 'PuOr', 'RdBu', 'RdGy', 'RdYlBu', 'RdYlGn', 'Spectral',
@@ -20,12 +21,12 @@ var brewerMethods = [
 });
 // var brewerMethods = Object.keys(colorBrewer);
 
-// import standardExtCode from './standard_extend.glsl';
-// Shader.import(standardExtCode);
+import standardExtCode from './standard_extend.glsl';
+Shader.import(standardExtCode);
 
-var shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('clay.standardMR.fragment'));
+var shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext'));
 
-var CONFIG_SCHEMA_VERSION = 1;
+var CONFIG_SCHEMA_VERSION = 2;
 function createDefaultConfig() {
     var config = {
 
@@ -45,7 +46,7 @@ function createDefaultConfig() {
         shadowBlurSize: 2,
 
         cameraPosition: [0, 0],
-        cameraDistance: 10,
+        cameraDistance: 12,
 
         baseColor: [0, 63, 97],
 
@@ -103,6 +104,9 @@ function clusterColors(geometryData, colorCount) {
 
 
 var config;
+var noSaveConfig = {
+    maskImage: ''
+};
 
 try {
     config = JSON.parse(localStorage.getItem('main-config'));
@@ -177,8 +181,12 @@ function reset() {
     let newConfig = createDefaultConfig();
     merge(config, newConfig);
 
+    noSaveConfig.maskImage = '';
+
     controlKit.update();
+
     updateScrollingPapers();
+    app.methods.updateBaseColor();
 }
 
 // Auto save
@@ -186,8 +194,6 @@ setInterval(() => {
     localStorage.setItem('main-config', JSON.stringify(config));
     // console.log('Saved');
 }, 2000);
-
-
 
 document.getElementById('undo').addEventListener('click', undo);
 document.getElementById('redo').addEventListener('click', redo);
@@ -223,12 +229,13 @@ var app = application.create('#main', {
                     quality: 'high'
                 },
                 screenSpaceReflection: {
-                    enable: true
+                    enable: false
                 }
             }
         });
         // TODO
         // this._advancedRenderer._renderMain._compositor._compositeNode.undefine('TONEMAPPING');
+        this._rootNode.rotation.rotateX(-Math.PI / 2);
 
         this._camera = app.createCamera([0, 0, 10], [0, 0, 0]);
         this._camera.far = 50;
@@ -250,10 +257,17 @@ var app = application.create('#main', {
         app.methods.updateCamera();
 
         this._paperMesh;
-        app.methods.updateScrollingPapers();
-        app.methods.updatePaperColors();
+
+        this._maskImage;
+        this._maskImageSrc;
+
         app.methods.updateBaseColor();
-        app.methods.changePaperDetailTexture(app);
+
+        app.methods.updateMaskImage().then(() => {
+            app.methods.updateScrollingPapers();
+            app.methods.updatePaperColors();
+            app.methods.changePaperDetailTexture(app);
+        });
     },
 
     loop() {
@@ -265,16 +279,48 @@ var app = application.create('#main', {
             this._advancedRenderer.render();
         },
 
+        updateMaskImage() {
+            // this._maskImage = createTextMaskImage('A');
+            // return Promise.resolve();
+
+            if (this._maskImageSrc === noSaveConfig.maskImage) {
+                return Promise.resolve(
+                    this._maskImage
+                );
+            }
+            else if (!noSaveConfig.maskImage || noSaveConfig.maskImage === 'none') {
+                this._maskImage = null;
+                this._maskImageSrc = '';
+                return Promise.resolve(null);
+            }
+            else {
+                return new Promise(resolve => {
+                    let img = new Image();
+                    img.onload = () => {
+                        // Cutoff the white
+                        this._maskImage = createMaskImage(img, 220, true);
+                        this._maskImageSrc = noSaveConfig.maskImage;
+
+                        // Create cutoff texture
+
+
+                        resolve(this._maskImage);
+                    };
+                    img.src = noSaveConfig.maskImage;
+                });
+            }
+        },
+
         updateShadow() {
             var x = -config.shadowDirection[0];
-            var y = -config.shadowDirection[1];
-            var lightDir = new Vector3(x, y, 1).normalize();
-            var normal = Vector3.POSITIVE_Z;
+            var z = config.shadowDirection[1];
+            var lightDir = new Vector3(x, 1, z).normalize();
+            var normal = Vector3.POSITIVE_Y;
             var ndl = Vector3.dot(lightDir, normal);
             this._dirLight.intensity = 0.7 / ndl;
 
-            this._dirLight.position.set(x, y, 1);
-            this._dirLight.lookAt(Vector3.ZERO, Vector3.UP);
+            this._dirLight.position.set(x, 1, z);
+            this._dirLight.lookAt(Vector3.ZERO, new Vector3(0, 0, -1));
             this._advancedRenderer.setShadow({
                 kernelSize: config.shadowKernelSize,
                 blurSize: Math.max(config.shadowBlurSize, 1)
@@ -284,12 +330,12 @@ var app = application.create('#main', {
 
         updateCamera() {
             // TODO RESET CAMERA
-            var z = config.cameraDistance;
-            var x = config.cameraPosition[0] * z;
-            var y = config.cameraPosition[1] * z;
+            var y = config.cameraDistance;
+            var x = config.cameraPosition[0] * y;
+            var z = -config.cameraPosition[1] * y;
 
             this._camera.position.set(x, y, z);
-            this._camera.lookAt(Vector3.ZERO, Vector3.UP);
+            this._camera.lookAt(Vector3.ZERO, new Vector3(0, 0, -1));
 
             this._advancedRenderer.render();
         },
@@ -312,7 +358,11 @@ var app = application.create('#main', {
             perlinSeed(config.seed);
             // let polylines = generateCircle([0, 0], 0.1, 10, 0.5);
             let polylines = generatePerlin(
-                [-11, -11], [11, 11], config.number, config.trail, config.noiseScale
+                [-11, -11], [11, 11],
+                config.number,
+                config.trail,
+                config.noiseScale,
+                this._maskImage
             );
             let geometryData = [];
             let vertexCount = 0;
@@ -365,18 +415,14 @@ var app = application.create('#main', {
 
         updatePaperColors() {
             let colors = config.layers.map(layer => layer.color.map(channel => channel / 255));
-            // this._scrollingPapers.forEach((mesh, idx) => {
-            //     let color = lerp((idx / (this._scrollingPapers.length - 1) * 4) % 1, colors);
-            //     mesh.material.set('color', color);
-            // });
             if (this._paperMesh) {
-                if (config.clusterColors) {
+                if (config.clusterColors
+                    && this._geometryData.length > config.colorNumber * 4   // Needs to have enough data
+                ) {
                     clusterColors(this._geometryData, Math.round(config.colorNumber));
                 }
                 else {
                     this._geometryData.forEach((item, index) => {
-                        // let colorPercent = index / (this._geometryData.length - 1);
-                        // let colorIndex = Math.floor(colorPercent * (Math.round(config.colorNumber) - 1));
                         let colorIndex = index % Math.round(config.colorNumber);
                         item.colorIndex = colorIndex;
                     });
@@ -390,9 +436,6 @@ var app = application.create('#main', {
                     let colorIndex = this._geometryData[idx].colorIndex;
                     let color = colors[colorIndex];
                     let intensity = config.layers[colorIndex].intensity;
-                    // color[0] /= 255;
-                    // color[1] /= 255;
-                    // color[2] /= 255;
                     for (let k = 0; k < this._geometryData[idx].vertexCount; k++) {
                         for (let i = 0; i < 3; i++) {
                             colorValue[off++] = color[i] * intensity;
@@ -410,10 +453,10 @@ var app = application.create('#main', {
             var self = this;
             function setDetailTexture(detailTexture) {
                 self._paperMesh.material.set('roughness', 1);
-                self._paperMesh.material.set('diffuseMap', detailTexture);
+                self._paperMesh.material.set('detailMap', detailTexture);
                 self._groundPlane.material.set('roughness', 1);
-                self._groundPlane.material.set('diffuseMap', detailTexture);
-                self._groundPlane.material.set('uvRepeat', [8, 8]);
+                self._groundPlane.material.set('detailMap', detailTexture);
+                self._groundPlane.material.set('detailMapTiling', [8, 8]);
 
                 self._advancedRenderer.render();
             }
@@ -421,7 +464,6 @@ var app = application.create('#main', {
             function setDetailNormalMap(normalTexture) {
                 self._paperMesh.material.set('normalMap', normalTexture);
                 self._paperMesh.material.set('normalScale', config.paperNormalScale);
-                self._groundPlane.material.set('normalMap', normalTexture);
                 self._advancedRenderer.render();
             }
 
@@ -445,6 +487,21 @@ var app = application.create('#main', {
         }
     }
 });
+
+function doUpdateMaskImage() {
+    app.methods.updateMaskImage().then(() => {
+        app.methods.updateScrollingPapers();
+        app.methods.updatePaperColors();
+        app.methods.changePaperDetailTexture(app);
+    });
+}
+
+function updateMaskImage() {
+    doUpdateMaskImage();
+    saveStates(() => {
+        doUpdateMaskImage();
+    });
+}
 
 var updateScrollingPapers = debounce(function () {
     app.methods.updateScrollingPapers();
@@ -501,6 +558,7 @@ scenePanel.addGroup({ label: 'Generate' })
     .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapers, step: 10, min: 50 })
     // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapers, step: 5, min: 50 })
     .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapers, step: 1, min: 1 })
+    .addCustomComponent(TextureUI, noSaveConfig, 'maskImage', { label: 'Mask', onChange: updateMaskImage })
     .addCheckbox(config, 'clusterColors', { label: 'Group Color', onChange: updatePaperColors })
     .addButton('Random', function () {
         config.seed = Math.random();
