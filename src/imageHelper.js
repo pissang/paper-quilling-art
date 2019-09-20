@@ -1,9 +1,10 @@
 const MASK_SIZE = 256;
 
-function createCtx() {
+function createCtx(width, height) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = canvas.height = MASK_SIZE;
+    canvas.width = width;
+    canvas.height = height;
     return ctx;
 }
 export function createTextMaskImage(text) {
@@ -18,8 +19,8 @@ export function createTextMaskImage(text) {
     return ctx.getImageData(0, 0, MASK_SIZE, MASK_SIZE);
 };
 
-export function createMaskImage(image, cutoff, inverse) {
-    const ctx = createCtx();
+export function resizeImage(image, targetWidth, targetHeight) {
+    const ctx = createCtx(targetWidth, targetHeight);
     let originWidth = image.width;
     let originHeight = image.height;
 
@@ -28,18 +29,24 @@ export function createMaskImage(image, cutoff, inverse) {
     let height;
     let x = 0;
     let y = 0;
-    if (aspect > 1) {
-        width = MASK_SIZE;
-        height = MASK_SIZE / aspect;
-        y = (MASK_SIZE - height) / 2;
+    if (aspect > targetWidth / targetHeight) {
+        width = targetWidth;
+        height = targetHeight / aspect;
+        y = (targetHeight - height) / 2;
     }
     else {
-        height = MASK_SIZE;
-        width = MASK_SIZE * aspect;
-        x = (MASK_SIZE - width) / 2;
+        height = targetHeight;
+        width = targetWidth * aspect;
+        x = (targetWidth - width) / 2;
     }
-
     ctx.drawImage(image, x, y, width, height);
+    return ctx.canvas;
+}
+
+export function createMaskImage(image, cutoff, inverse) {
+    const canvas = resizeImage(image, MASK_SIZE, MASK_SIZE);
+    const ctx = canvas.getContext('2d');
+
     let data = ctx.getImageData(0, 0, MASK_SIZE, MASK_SIZE);
 
     let pixels = data.data;
@@ -54,4 +61,8 @@ export function createMaskImage(image, cutoff, inverse) {
     }
 
     return data;
+};
+
+export function extractOutline() {
+
 }

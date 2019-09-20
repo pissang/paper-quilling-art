@@ -1,6 +1,6 @@
 import {perlin2, seed} from '../dep/noise2';
 
-let ALPHA_THRESHOLD = 100;
+let ALPHA_THRESHOLD = 240;
 
 function halton(index, base) {
 
