@@ -7,8 +7,8 @@ function createCtx(width, height) {
     canvas.height = height;
     return ctx;
 }
-export function createTextMaskImage(text) {
-    const ctx = createCtx();
+export function createTextMaskImage(text, font) {
+    const ctx = createCtx(MASK_SIZE, MASK_SIZE);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

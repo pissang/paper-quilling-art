@@ -1,6 +1,8 @@
 import {perlin2, seed} from '../dep/noise2';
+import seedrandom from 'seedrandom';
 
 let ALPHA_THRESHOLD = 240;
+let random = seedrandom('seedrandom');
 
 function halton(index, base) {
 
@@ -16,7 +18,7 @@ function halton(index, base) {
 }
 
 function getIdx(px, py, imageWidth, imageHeight) {
-    return Math.round((1 - py) * imageHeight) * imageWidth + Math.round(px * (imageWidth - 1));
+    return Math.round((1 - py) * (imageHeight - 1)) * imageWidth + Math.round(px * (imageWidth - 1));
 }
 
 function lineGenerator(x, y, min, max, trail, noiseScale, maskImage) {
@@ -68,17 +70,18 @@ function countAvailablePercent(pixels) {
     return count / pixels.length;
 }
 
-export function generatePerlin(min, max, number, trail, noiseScale, maskImage) {
+export function generatePerlin(min, max, number, trail, noiseScale, maskImage, outlinePoints) {
     let polylines = [];
     let width = max[0] - min[0];
     let height = max[1] - min[1];
     let pixels = maskImage && maskImage.data;
-    let percent = maskImage ? countAvailablePercent(maskImage.data) : 1;
+    // let percent = maskImage ? countAvailablePercent(maskImage.data) : 1;
     let randomInPixels = !!maskImage;
     let imageWidth = maskImage && maskImage.width;
     let imageHeight = maskImage && maskImage.height;
+    let outlinePointsCount = outlinePoints && outlinePoints.length / 2;
 
-    number *= Math.sqrt(Math.sqrt(percent));   // PENDING
+    // number *= Math.sqrt(Math.sqrt(percent));   // PENDING
 
     let count = 0;
     let iter = 0;
@@ -86,6 +89,17 @@ export function generatePerlin(min, max, number, trail, noiseScale, maskImage) {
         && iter < 1e6   // Safe protection
     ) {
         iter++;
+        let x;
+        let y;
+        // if (randomInPixels) {
+        //     let idx = Math.round(random() * outlinePointsCount - 1);
+        //     x = outlinePoints[idx * 2];
+        //     y = outlinePoints[idx * 2 + 1];
+        // }
+        // else {
+        //     x = halton(iter, 2) * width + min[0];
+        //     y = halton(iter, 3) * height + min[1];
+        // }
         let px = halton(iter, 2);
         let py = halton(iter, 3);
         let idx = getIdx(px, py, imageWidth, imageHeight);
@@ -95,9 +109,8 @@ export function generatePerlin(min, max, number, trail, noiseScale, maskImage) {
                 continue;
             }
         }
-
-        let x = px * width + min[0];
-        let y = py * height + min[1];
+        x = px * width + min[0];
+        y = py * height + min[1];
 
         let polyline = lineGenerator(x, y, min, max, trail, noiseScale, maskImage);
         if (polyline.length < 10) {
@@ -108,8 +121,33 @@ export function generatePerlin(min, max, number, trail, noiseScale, maskImage) {
         count++;
     }
 
+
+    if (randomInPixels) {
+        count = iter = 0;
+        // Add more points
+        while (count < number / 5
+            && iter < 1e6   // Safe protection
+        ) {
+            iter++;
+            let idx = Math.round(random() * outlinePointsCount - 1);
+            let x = outlinePoints[idx * 2];
+            let y = outlinePoints[idx * 2 + 1];
+
+            let polyline = lineGenerator(x, y, min, max, trail, noiseScale, maskImage);
+            if (polyline.length < 10) {
+                continue;
+            }
+            polylines.push(polyline);
+
+            count++;
+        }
+
+    }
+
     return polylines;
 }
+
 export function perlinSeed(value) {
+    random = seedrandom(value.toString());
     seed(value);
 }

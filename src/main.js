@@ -14,9 +14,10 @@ import merge from 'lodash.merge';
 import { createTextMaskImage, createMaskImage, resizeImage } from './imageHelper';
 import Portrace from './dep/potrace';
 
+const BOX_SIZE = 11;
 const BOX = [
-    [-11, -11],
-    [11, 11]
+    [-BOX_SIZE, -BOX_SIZE],
+    [BOX_SIZE, BOX_SIZE]
 ];
 
 let brewerMethods = [
@@ -31,8 +32,9 @@ import standardExtCode from './standard_extend.glsl';
 Shader.import(standardExtCode);
 
 let shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext'));
+let shadowShader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext_shadow'));
 
-let CONFIG_SCHEMA_VERSION = 2;
+let CONFIG_SCHEMA_VERSION = 10;
 function createDefaultConfig() {
     let config = {
 
@@ -41,33 +43,51 @@ function createDefaultConfig() {
         seed: Math.random(),
 
         thickness: 0.01,
-        height: 1,
+        minHeight: 1,
+        maxHeight: 1,
 
         number: 800,
         trail: 100,
         noiseScale: 3,
 
+
+        // Configuration about mask
+        maskImage: '',
+        showOutline: true,
+        outlineColor: [0, 63, 97],
+        outlineThickness: 0.04,
+        outlineHeight: 1,
+
+        maskText: '',
+        maskTextFont: 'sans-serif',
+
+        // Configuration about shadow
         shadowDirection: [0.2, 0.2],
         shadowKernelSize: 16,
-        shadowBlurSize: 2,
+        shadowBlurSize: 4,
 
-        cameraPosition: [0, 0],
+        cameraAlpha: 0,
+        cameraBeta: 0,
         cameraDistance: 12,
 
-        baseColor: [0, 63, 97],
+        // Ground and background
+        backgroundColor: [48, 48, 48],
 
-        maskImage: '',
-
+        shadowIntensity: 0.8,
+        planeColor: [0, 63, 97],
+        showPlane: true,
+        // Configuration about texture
         paperDetail: './img/paper-detail.png',
         paperNormalDetail: './img/paper-normal.jpg',
-
         paperNormalScale: 1.5,
 
+        // Configuration about paper color
         clusterColors: true,
 
         colorNumber: 6,
 
         $colorNumberRange: [1, 7],
+        $normalizedRange: [0, 1],
 
         layers: []
     };
@@ -142,7 +162,7 @@ function undo() {
 
     merge(config, lastConfig.config);
     redoStates.push(clone({
-        config: currentConfig.config,
+        config: clone(currentConfig.config),
         updateMethod: currentConfig.updateMethod
     }));
 
@@ -189,7 +209,8 @@ function reset() {
     controlKit.update();
 
     updateScrollingPapers();
-    app.methods.updateBaseColor();
+    updateMaskImage();
+    app.methods.updatePlaneColor();
 }
 
 // Auto save
@@ -237,35 +258,60 @@ let app = application.create('#main', {
         });
         // TODO
         // this._advancedRenderer._renderMain._compositor._compositeNode.undefine('TONEMAPPING');
-        this._rootNode.rotation.rotateX(-Math.PI / 2);
+        // this._rootNode.rotation.rotateX(-Math.PI / 2);
 
         this._camera = app.createCamera([0, 0, 10], [0, 0, 0]);
-        this._camera.far = 50;
+        this._camera.far = 100;
 
         this._dirLight = app.createDirectionalLight([0, 0, 0], '#fff', 0.7);
         this._dirLight.shadowResolution = 1024;
         this._dirLight.shadowBias = 0.001;
 
-        app.createAmbientCubemapLight('img/pisa.hdr', 1, 1, 2);
 
         this._groundPlane = app.createPlane({
-            shader: shader
+            shader,
+            roughness: 1
         });
+        this._groundMaterial = this._groundPlane.material;
+
+        this._groundShadowMaterial = new Material({ shader: shadowShader });
         this._groundPlane.scale.set(11, 11, 1);
         this._groundPlane.geometry.generateTangents();
         this._rootNode.add(this._groundPlane);
 
         app.methods.updateShadow();
-        app.methods.updateCamera();
 
         this._paperMesh;
-        this._outlineMesh;
+
+        this._outlineMesh = new Mesh({
+            material: new Material({shader})
+        });
 
         this._maskImage;
+        this._maskImageData;
         this._maskImageSrc;
-        this._maskImageOutlines;
+        this._maskOutlinePoints;
 
-        app.methods.updateBaseColor();
+        let control = new plugin.OrbitControl({
+            domElement: app.renderer.canvas,
+            target: this._camera,
+            timeline: app.timeline,
+            damping: 0
+        });
+        control.setAlpha(config.cameraAlpha);
+        control.setBeta(config.cameraBeta);
+        control.setDistance(config.cameraDistance);
+
+        control.on('update', () => {
+            this._advancedRenderer.render();
+            config.cameraAlpha = control.getAlpha();
+            config.cameraBeta = control.getBeta();
+            config.cameraDistance = control.getDistance();
+        });
+
+        app.createAmbientCubemapLight('img/pisa.hdr', 0.01, 1, 2);
+
+        app.methods.updatePlaneColor();
 
         app.methods.updateMaskImage().then(() => {
             app.methods.updateScrollingPapers();
@@ -284,16 +330,14 @@ let app = application.create('#main', {
         },
 
         updateMaskImage(app) {
-            // this._maskImage = createTextMaskImage('A');
-            // return Promise.resolve();
-
             if (this._maskImageSrc === config.maskImage) {
+                app.methods.updateOutline();
                 return Promise.resolve(
                     this._maskImage
                 );
             }
             else if (!config.maskImage || config.maskImage === 'none') {
-                this._maskImage = null;
+                this._maskImage = this._maskImageData = null;
                 this._maskImageSrc = '';
                 return Promise.resolve(null);
             }
@@ -301,51 +345,74 @@ let app = application.create('#main', {
                 return new Promise(resolve => {
                     let img = new Image();
                     img.onload = () => {
+                        this._maskImage = img;
                         // Cutoff the white
-                        this._maskImage = createMaskImage(img, 220, true);
+                        this._maskImageData = createMaskImage(img, 220, true);
                         this._maskImageSrc = config.maskImage;
 
-                        app.methods.updateOutline(img);
+                        app.methods.updateOutline();
 
-                        resolve(this._maskImage);
+                        resolve();
                     };
                     img.src = config.maskImage;
                 });
             }
         },
 
-        updateOutline(app, img) {
-            let potrace = new Portrace(resizeImage(img, 256, 256));
+        updateOutline(app) {
+            if (!this._maskImage) {
+                return;
+            }
+
+            let potrace = new Portrace(resizeImage(this._maskImage, 128, 128));
             potrace.process();
-            let svg = potrace.getSVG(1);
-            let doc = new DOMParser().parseFromString(svg, 'application/xml');
-            let path = doc.querySelector('path');
+            let svgStr = potrace.getSVG(1);
+            let svg = new DOMParser().parseFromString(svgStr, 'application/xml');
 
+            let div = document.createElement('div');
+            div.style.cssText = 'position:absolute;left:0;top:0;z-index:1000';
+            // div.appendChild(
+            //     div.ownerDocument.importNode(svg.documentElement, true)
+            // );
+            document.body.appendChild(div);
 
-            let scale = [(BOX[1][0] - BOX[0][0]) / 256, (BOX[1][1] - BOX[0][1]) / 256];
+            let scale = [(BOX[1][0] - BOX[0][0]) / 128, (BOX[1][1] - BOX[0][1]) / 128];
             let translation = [BOX[0][0], BOX[0][1]];
 
-            let totalLength = path.getTotalLength();
-            let points = [];
-            for (let i = 0; i < 2000; i++) {
-                let pt = path.getPointAtLength(i / 1000 * totalLength);
-                points.push(
-                    [pt.x * scale[0] + translation[0],
-                    -(pt.y * scale[1] + translation[1])]
-                );
+            let pathAll = svg.querySelectorAll('path');
+            let polylines = [];
+            let maskOutlinePoints = [];
+            for (let p = 0; p < pathAll.length; p++) {
+                let path = pathAll[p];
+                let totalLength = path.getTotalLength();
+                let polyline = [];
+                for (let i = 0; i <= totalLength; i += 0.5) {
+                    let pt = path.getPointAtLength(i);
+                    let x = pt.x * scale[0] + translation[0];
+                    let y = -(pt.y * scale[1] + translation[1]);
+                    polyline.push([x, y]);
+                    maskOutlinePoints.push(x);
+                    maskOutlinePoints.push(y);
+                }
+                polylines.push(polyline);
+            }
+            this._maskOutlinePoints = new Float32Array(maskOutlinePoints);
+
+
+            if (!(config.outlineHeight > 0 && config.outlineThickness > 0)) {
+                this._rootNode.remove(this._outlineMesh);
+                this._advancedRenderer.render();
+                return;
             }
 
-            let {indices, position, normal, uv} = extrudePolyline([points], {
+            this._rootNode.add(this._outlineMesh);
+
+
+            let {indices, position, normal, uv} = extrudePolyline(polylines, {
                 // TODO Configuration
-                lineWidth: config.thickness * 5, depth: config.depth
+                lineWidth: config.outlineThickness, depth: config.outlineHeight
             });
 
-            if (!this._outlineMesh) {
-                this._outlineMesh = new Mesh({
-                    material: new Material({shader})
-                });
-                this._rootNode.add(this._outlineMesh);
-            }
             if (this._outlineMesh.geometry) {
                 this._outlineMesh.geometry.dispose(this._renderer);
             }
@@ -357,34 +424,24 @@ let app = application.create('#main', {
             geo.generateTangents();
             geo.updateBoundingBox();
             geo.dirty();
+
+            app.methods.updateOutlineColor();
         },
 
         updateShadow() {
             let x = -config.shadowDirection[0];
-            let z = config.shadowDirection[1];
-            let lightDir = new Vector3(x, 1, z).normalize();
-            let normal = Vector3.POSITIVE_Y;
+            let y = -config.shadowDirection[1];
+            let lightDir = new Vector3(x, y, 1).normalize();
+            let normal = Vector3.POSITIVE_Z;
             let ndl = Vector3.dot(lightDir, normal);
             this._dirLight.intensity = 0.7 / ndl;
 
-            this._dirLight.position.set(x, 1, z);
-            this._dirLight.lookAt(Vector3.ZERO, new Vector3(0, 0, -1));
+            this._dirLight.position.set(x, y, 1);
+            this._dirLight.lookAt(Vector3.ZERO, new Vector3(0, 1, 0));
             this._advancedRenderer.setShadow({
                 kernelSize: config.shadowKernelSize,
                 blurSize: Math.max(config.shadowBlurSize, 1)
             });
-            this._advancedRenderer.render();
-        },
-
-        updateCamera() {
-            // TODO RESET CAMERA
-            let y = config.cameraDistance;
-            let x = config.cameraPosition[0] * y;
-            let z = -config.cameraPosition[1] * y;
-
-            this._camera.position.set(x, y, z);
-            this._camera.lookAt(Vector3.ZERO, new Vector3(0, 0, -1));
-
             this._advancedRenderer.render();
         },
 
@@ -408,7 +465,8 @@ let app = application.create('#main', {
                 config.number,
                 config.trail,
                 config.noiseScale,
-                this._maskImage
+                this._maskImageData,
+                this._maskOutlinePoints
             );
             let geometryData = [];
             let vertexCount = 0;
@@ -419,7 +477,7 @@ let app = application.create('#main', {
                 // let {indices, position, normal} = extrude(polyline, 1);
                 let {indices, position, normal, uv} = extrudePolyline([polyline], {
                     // TODO Configuration
-                    lineWidth: config.thickness, depth: config.height
+                    lineWidth: config.thickness, depth: config.minHeight
                 });
                 geometryData.push({
                     indices, position, normal, uv,
@@ -454,9 +512,35 @@ let app = application.create('#main', {
             this._geometryData = geometryData;
         },
 
-        updateBaseColor() {
-            this._groundPlane.material.set('color', stringify(config.baseColor, 'rgb'));
+        updatePlaneColor() {
+            this._groundPlane.material.set('color', config.planeColor.map(rgb => rgb / 255));
             this._advancedRenderer.render();
+        },
+
+        updateOutlineColor() {
+            if (this._outlineMesh) {
+                this._outlineMesh.material.set('color', config.outlineColor.map(rgb => rgb / 255));
+            }
+
+            this._advancedRenderer.render();
+        },
+
+        showPlane() {
+            this._groundPlane.material = this._groundMaterial;
+            this._groundPlane.scale.set(BOX_SIZE, BOX_SIZE, 1);
+            this._advancedRenderer.render();
+        },
+
+        hidePlane() {
+            this._groundPlane.material = this._groundShadowMaterial;
+            this._groundPlane.scale.set(BOX_SIZE * 2, BOX_SIZE * 2, 1);
+            this._advancedRenderer.render();
+        },
+
+        updatePlane(app) {
+            config.showPlane ? app.methods.showPlane() : app.methods.hidePlane();
+            app.methods.updatePlaneColor();
+            this._groundPlane.material.set('shadowIntensity', config.shadowIntensity);
         },
 
         updatePaperColors() {
@@ -501,13 +585,14 @@ let app = application.create('#main', {
                 self._paperMesh.material.set('roughness', 1);
                 self._paperMesh.material.set('detailMap', detailTexture);
 
-                self._groundPlane.material.set('roughness', 1);
-                self._groundPlane.material.set('detailMap', detailTexture);
-                self._groundPlane.material.set('detailMapTiling', [8, 8]);
+                self._groundMaterial.set('detailMap', detailTexture);
+                self._groundMaterial.set('detailMapTiling', [8, 8]);
 
                 if (self._outlineMesh) {
-                    self._outlineMesh.material.set('rougness', 1);
+                    self._outlineMesh.material.set('roughness', 1);
                     self._outlineMesh.material.set('detailMap', detailTexture);
+                    self._outlineMesh.material.set('detailMapTiling', [4, 4]);
+                    self._outlineMesh.material.set('uvRepeat', [4, 4]);
                 }
 
                 self._advancedRenderer.render();
@@ -559,6 +644,22 @@ function updateMaskImage() {
     });
 }
 
+function updateOutline() {
+    app.methods.updateOutline();
+    saveStates(() => {
+        app.methods.updateOutline();
+    });
+}
+
+let updateOutlineDebounced = debounce(updateOutline, 500);
+
+function updateOutlineColor() {
+    app.methods.updateOutlineColor();
+    saveStates(() => {
+        app.methods.updateOutlineColor();
+    });
+}
+
 function doUpdateScrollingPapers() {
     app.methods.updateScrollingPapers();
     app.methods.updatePaperColors();
@@ -573,10 +674,10 @@ function updateScrollingPapersImme() {
 
 let updateScrollingPapers = debounce(updateScrollingPapersImme, 500);
 
-function updateBaseColor() {
-    app.methods.updateBaseColor();
+function updatePlaneColor() {
+    app.methods.updatePlaneColor();
     saveStates(() => {
-        app.methods.updateBaseColor();
+        app.methods.updatePlaneColor();
     });
 }
 function updatePaperColors() {
@@ -597,13 +698,18 @@ function updateShadow() {
         app.methods.updateShadow();
     });
 }
-function updateCamera() {
-    app.methods.updateCamera();
+
+function doUpdateBackgroundAndBase() {
+    document.body.querySelector('#main').style.backgroundColor = 'rgb(' + config.backgroundColor.join(',') + ')';
+    app.methods.updatePlane();
+}
+function updateBackgroundAndBase() {
+    doUpdateBackgroundAndBase();
     saveStates(() => {
-        app.methods.updateCamera();
+        doUpdateBackgroundAndBase();
     });
 }
-
+doUpdateBackgroundAndBase();
 
 let controlKit = new ControlKit({
     loadAndSave: false,
@@ -614,17 +720,28 @@ let scenePanel = controlKit.addPanel({ label: 'Settings', width: 250 });
 
 scenePanel.addGroup({ label: 'Generate' })
     .addNumberInput(config, 'thickness', { label: 'Thickness', onChange: updateScrollingPapers, step: 0.005, min: 0.01 })
-    .addNumberInput(config, 'height', { label: 'Height', onChange: updateScrollingPapers, step: 0.1, min: 0.1 })
+    .addNumberInput(config, 'minHeight', { label: 'Height', onChange: updateScrollingPapers, step: 0.1, min: 0.1 })
     .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapers, step: 10, min: 50 })
     // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapers, step: 5, min: 50 })
     .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapers, step: 1, min: 1 })
-    .addCustomComponent(TextureUI, config, 'maskImage', { label: 'Mask', onChange: updateMaskImage })
     .addCheckbox(config, 'clusterColors', { label: 'Group Color', onChange: updatePaperColors })
     .addButton('Random', function () {
         config.seed = Math.random();
 
         updateScrollingPapersImme();
     });
+
+scenePanel.addGroup({ label: 'Background' })
+    .addColor(config, 'backgroundColor', { label: 'Background', colorMode: 'rgb', onChange: updateBackgroundAndBase })
+    .addSlider(config, 'shadowIntensity', '$normalizedRange', { label: 'Shadow', onChange: updateBackgroundAndBase })
+    .addCheckbox(config, 'showPlane', { label: 'Plane', onChange: updateBackgroundAndBase})
+    .addColor(config, 'planeColor', { label: 'Plane Color', colorMode: 'rgb', onChange: updatePlaneColor });
+
+scenePanel.addGroup({ label: 'Outline' })
+    .addCustomComponent(TextureUI, config, 'maskImage', { label: 'Mask', onChange: updateMaskImage })
+    .addNumberInput(config, 'outlineThickness', { label: 'Thickness', onChange: updateOutlineDebounced, step: 0.005, min: 0.01 })
+    .addNumberInput(config, 'outlineHeight', { label: 'Height', onChange: updateOutlineDebounced, step: 0.1, min: 0.1 })
+    .addColor(config, 'outlineColor', { label: 'Color', colorMode: 'rgb', onChange: updateOutlineColor });
 
 scenePanel.addGroup({ label: 'Details', enable: false })
     .addCustomComponent(TextureUI, config, 'paperDetail', { label: 'Detail', onChange: changePaperDetailTexture })
@@ -636,12 +753,7 @@ scenePanel.addGroup({ label: 'Shadow', enable: false })
     .addPad(config, 'shadowDirection', { label: 'Direction', onChange: updateShadow })
     .addNumberInput(config, 'shadowBlurSize', { label: 'Blur Size', onChange: updateShadow, step: 0.5, min: 0 });
 
-scenePanel.addGroup({ label: 'Camera', enable: false })
-    .addPad(config, 'cameraPosition', { label: 'Position', onChange: updateCamera })
-    .addNumberInput(config, 'cameraDistance', { label: 'Distance', onChange: updateCamera, step: 0.5, min: 0 });
-
 let colorGroup = scenePanel.addGroup({ label: 'Colors' });
-colorGroup.addColor(config, 'baseColor', { label: 'Base Color', colorMode: 'rgb', onChange: updateBaseColor });
 
 colorGroup.addButton('Random Colors', function () {
     createRandomColors();

@@ -1236,21 +1236,22 @@ var Potrace = function(img, parameter) {
 
       var svg = '<svg id="svg" version="1.1" width="' + w + '" height="' + h +
           '" xmlns="http://www.w3.org/2000/svg">';
-      svg += '<path d="';
       for (i = 0; i < len; i++) {
-        c = pathlist[i].curve;
-        svg += path(c);
+        svg += '<path d="';
+          c = pathlist[i].curve;
+          svg += path(c);
+          if (opt_type === "curve") {
+            strokec = "black";
+            fillc = "none";
+            fillrule = '';
+          } else {
+            strokec = "none";
+            fillc = "black";
+            fillrule = ' fill-rule="evenodd"';
+          }
+          svg += '" stroke="' + strokec + '" fill="' + fillc + '"' + fillrule + '/>';
       }
-      if (opt_type === "curve") {
-        strokec = "black";
-        fillc = "none";
-        fillrule = '';
-      } else {
-        strokec = "none";
-        fillc = "black";
-        fillrule = ' fill-rule="evenodd"';
-      }
-      svg += '" stroke="' + strokec + '" fill="' + fillc + '"' + fillrule + '/></svg>';
+      svg += '</svg>';
       return svg;
     }
 

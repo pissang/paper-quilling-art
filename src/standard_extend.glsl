@@ -532,8 +532,6 @@ void main() {
     outColor = linearTosRGB(outColor);
 #endif
     gl_FragColor = encodeHDR(outColor);
-
-    // gl_FragColor = vec4(N, 1.0);
 }
 
 @end
@@ -552,5 +550,67 @@ void main() {
 #define USE_ROUGHNESS
 
 @import clay.standard.fragment
+
+@end
+
+
+
+
+
+
+// Extend detail map for standard shader.
+@export papercut.standard_ext_shadow
+
+@import clay.standard.chunk.varying
+
+uniform mat4 viewInverse : VIEWINVERSE;
+
+uniform float shadowIntensity: 0.8;
+#ifdef SSAOMAP_ENABLED
+// For ssao prepass
+uniform sampler2D ssaoMap;
+uniform vec4 viewport : VIEWPORT;
+#endif
+
+@import clay.standard.chunk.light_header
+
+@import clay.plugin.compute_shadow_map
+
+
+void main() {
+    float shadowFactor = 1.0;
+
+#ifdef DIRECTIONAL_LIGHT_COUNT
+#if defined(DIRECTIONAL_LIGHT_SHADOWMAP_COUNT)
+    float shadowContribsDir[DIRECTIONAL_LIGHT_COUNT];
+    if(shadowEnabled)
+    {
+        computeShadowOfDirectionalLights(v_WorldPosition, shadowContribsDir);
+    }
+#endif
+    for(int _idx_ = 0; _idx_ < DIRECTIONAL_LIGHT_COUNT; _idx_++)
+    {{
+        float shadowContrib = 1.0;
+#if defined(DIRECTIONAL_LIGHT_SHADOWMAP_COUNT)
+        if(shadowEnabled)
+        {
+            shadowContrib = shadowContribsDir[_idx_];
+        }
+#endif
+
+        shadowFactor *= shadowContrib;
+    }}
+#endif
+
+    float aoFactor = 1.0;
+#ifdef SSAOMAP_ENABLED
+    // PENDING
+    aoFactor = min(texture2D(ssaoMap, (gl_FragCoord.xy - viewport.xy) / viewport.zw).r, aoFactor);
+#endif
+
+    shadowFactor *= aoFactor;
+
+    gl_FragColor = vec4(0.0, 0.0, 0.0, (1.0 - shadowFactor) * shadowIntensity);
+}
 
 @end
