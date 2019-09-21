@@ -334,7 +334,7 @@ let app = application.create('#main', {
             if (config.maskText) {
                 this._maskImage = createTextMaskImage(config.maskText, config.maskTextFont);
                 this._maskImageData = this._maskImage.getContext('2d').getImageData(0, 0, this._maskImage.width, this._maskImage.height);
-                this._maskImageSrc = '';
+                this._maskImageSrc = '__text_placeholder__';
                 app.methods.updateOutline();
                 return Promise.resolve();
             }
@@ -348,6 +348,7 @@ let app = application.create('#main', {
             else if (!config.maskImage || config.maskImage === 'none') {
                 this._maskImage = this._maskImageData = null;
                 this._maskImageSrc = '';
+                app.methods.updateOutline();
                 return Promise.resolve(null);
             }
             else {
@@ -370,6 +371,8 @@ let app = application.create('#main', {
 
         updateOutline(app) {
             if (!this._maskImage) {
+                this._rootNode.remove(this._outlineMesh);
+                this._advancedRenderer.render();
                 return;
             }
 
@@ -395,7 +398,7 @@ let app = application.create('#main', {
                 let path = pathAll[p];
                 let totalLength = path.getTotalLength();
                 let polyline = [];
-                for (let i = 0; i <= totalLength; i += 0.5) {
+                for (let i = 0; i <= totalLength; i += 0.2) {
                     let pt = path.getPointAtLength(i);
                     let x = pt.x * scale[0] + translation[0];
                     let y = -(pt.y * scale[1] + translation[1]);
@@ -421,7 +424,6 @@ let app = application.create('#main', {
                 // TODO Configuration
                 lineWidth: config.outlineThickness, depth: config.outlineHeight
             });
-
             if (this._outlineMesh.geometry) {
                 this._outlineMesh.geometry.dispose(this._renderer);
             }
