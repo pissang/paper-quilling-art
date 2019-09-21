@@ -5,7 +5,7 @@ import TextureUI from './ui/Texture';
 import * as colorBrewer from 'd3-scale-chromatic';
 import {extrudePolyline} from 'geometry-extrude';
 // import {generateCircle} from './generator/circle';
-import {generatePerlin, perlinSeed} from './generator/perlin';
+import {generatePerlin, perlinSeed, rand} from './generator/perlin';
 import {extrude} from './extrude';
 import debounce from 'lodash.debounce';
 import clustering from 'density-clustering';
@@ -13,6 +13,19 @@ import clone from 'lodash.clonedeep';
 import merge from 'lodash.merge';
 import { createTextMaskImage, createMaskImageData, resizeImage } from './imageHelper';
 import Portrace from './dep/potrace';
+import seedrandom from 'seedrandom';
+
+clustering.KMEANS.prototype.randomCentroid = function() {
+    var maxId = this.dataset.length -1;
+    var centroid;
+    var id;
+
+    do {
+        id = Math.round(rand() * maxId);
+        centroid = this.dataset[id];
+    } while (this.centroids.indexOf(centroid) >= 0);
+    return centroid;
+};
 
 const BOX_SIZE = 11;
 const BOX = [
@@ -173,7 +186,6 @@ function undo() {
     }
     else {
         app.methods.updateScrollingPapers();
-        app.methods.updatePaperColors();
     }
 }
 
@@ -309,13 +321,12 @@ let app = application.create('#main', {
             config.cameraDistance = control.getDistance();
         });
 
-        app.createAmbientCubemapLight('img/pisa.hdr', 0.01, 1, 2);
+        app.createAmbientCubemapLight('img/hall.hdr', 0.01, 1, 2);
 
         app.methods.updatePlaneColor();
 
         app.methods.updateMaskImage().then(() => {
             app.methods.updateScrollingPapers();
-            app.methods.updatePaperColors();
             app.methods.changePaperDetailTexture(app);
         });
     },
@@ -488,7 +499,7 @@ let app = application.create('#main', {
                 // let {indices, position, normal} = extrude(polyline, 1);
                 let {indices, position, normal, uv} = extrudePolyline([polyline], {
                     // TODO Configuration
-                    lineWidth: config.thickness, depth: config.minHeight
+                    lineWidth: config.thickness, depth: 1
                 });
                 geometryData.push({
                     indices, position, normal, uv,
@@ -517,10 +528,11 @@ let app = application.create('#main', {
             geo.attributes.texcoord0.value = uvTotal;
             geo.indices = indicesTotal;
             geo.generateTangents();
-            geo.updateBoundingBox();
             geo.dirty();
 
             this._geometryData = geometryData;
+
+            app.methods.updatePaperColorsAndHeights();
         },
 
         updatePlaneColor() {
@@ -554,22 +566,28 @@ let app = application.create('#main', {
             this._groundPlane.material.set('shadowIntensity', config.shadowIntensity);
         },
 
-        updatePaperColors() {
+        updatePaperColorsAndHeights(app, onlyUpdateHeight) {
             let colors = config.layers.map(layer => layer.color.map(channel => channel / 255));
+            let heightsMap = [];
+            let fixedRand = seedrandom('height');
             if (this._paperMesh) {
-                if (config.clusterColors
-                    && this._geometryData.length > config.colorNumber * 4   // Needs to have enough data
-                ) {
-                    clusterColors(this._geometryData, Math.round(config.colorNumber));
-                }
-                else {
-                    this._geometryData.forEach((item, index) => {
-                        let colorIndex = index % Math.round(config.colorNumber);
-                        item.colorIndex = colorIndex;
-                    });
+                if (!onlyUpdateHeight) {
+                    // DON'T Update colors.
+                    if (config.clusterColors
+                        && this._geometryData.length > config.colorNumber * 4   // Needs to have enough data
+                    ) {
+                        clusterColors(this._geometryData, Math.round(config.colorNumber));
+                    }
+                    else {
+                        this._geometryData.forEach((item, index) => {
+                            let colorIndex = index % Math.round(config.colorNumber);
+                            item.colorIndex = colorIndex;
+                        });
+                    }
                 }
 
                 let colorValue = new Float32Array(this._paperMesh.geometry.vertexCount * 4);
+                let positionValue = this._paperMesh.geometry.attributes.position.value;
                 let off = 0;
                 let paperCount = this._geometryData.length;
                 for (let idx = 0; idx < paperCount; idx++) {
@@ -577,17 +595,29 @@ let app = application.create('#main', {
                     let colorIndex = this._geometryData[idx].colorIndex;
                     let color = colors[colorIndex];
                     let intensity = config.layers[colorIndex].intensity;
+                    if (heightsMap[colorIndex] == null) {
+                        heightsMap[colorIndex] = fixedRand() * (config.maxHeight - config.minHeight) + config.minHeight;
+                    }
+                    let vertexOffset = this._geometryData[idx].vertexOffset;
+                    let height = heightsMap[colorIndex];
                     for (let k = 0; k < this._geometryData[idx].vertexCount; k++) {
                         for (let i = 0; i < 3; i++) {
                             colorValue[off++] = color[i] * intensity;
                         }
                         colorValue[off++] = 1;
+
+                        if (positionValue[(k + vertexOffset) * 3 + 2] > 0) {
+                            positionValue[(k + vertexOffset) * 3 + 2] = Math.max(height, 0.01);
+                        }
                     }
                 }
                 this._paperMesh.geometry.attributes.color.value = colorValue;
                 this._paperMesh.geometry.dirtyAttribute('color');
+                this._paperMesh.geometry.dirtyAttribute('position');
             }
             this._advancedRenderer.render();
+
+            this._paperMesh.geometry.updateBoundingBox();
         },
 
         changePaperDetailTexture(app) {
@@ -643,7 +673,6 @@ let app = application.create('#main', {
 function doUpdateMaskImage() {
     app.methods.updateMaskImage().then(() => {
         app.methods.updateScrollingPapers();
-        app.methods.updatePaperColors();
         app.methods.changePaperDetailTexture(app);
     });
 }
@@ -675,7 +704,6 @@ function updateOutlineColor() {
 
 function doUpdateScrollingPapers() {
     app.methods.updateScrollingPapers();
-    app.methods.updatePaperColors();
 }
 
 function updateScrollingPapers() {
@@ -693,9 +721,15 @@ function updatePlaneColor() {
     });
 }
 function updatePaperColors() {
-    app.methods.updatePaperColors();
+    app.methods.updatePaperColorsAndHeights(false);
     saveStates(() => {
-        app.methods.updatePaperColors();
+        app.methods.updatePaperColorsAndHeights(false);
+    });
+}
+function updatePaperHeights() {
+    app.methods.updatePaperColorsAndHeights(true);
+    saveStates(() => {
+        app.methods.updatePaperColorsAndHeights(true);
     });
 }
 function changePaperDetailTexture() {
@@ -732,7 +766,8 @@ let scenePanel = controlKit.addPanel({ label: 'Settings', width: 250 });
 
 scenePanel.addGroup({ label: 'Generate' })
     .addNumberInput(config, 'thickness', { label: 'Thickness', onChange: updateScrollingPapersDebounced, step: 0.005, min: 0.01 })
-    .addNumberInput(config, 'minHeight', { label: 'Height', onChange: updateScrollingPapersDebounced, step: 0.1, min: 0.1 })
+    .addNumberInput(config, 'minHeight', { label: 'Min Height', onChange: updatePaperHeights, step: 0.1, min: 0.1 })
+    .addNumberInput(config, 'maxHeight', { label: 'Max Height', onChange: updatePaperHeights, step: 0.1, min: 0.1 })
     .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapersDebounced, step: 10, min: 50 })
     // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapersDebounced, step: 5, min: 50 })
     .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapersDebounced, step: 1, min: 1 })

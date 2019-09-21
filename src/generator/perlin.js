@@ -151,3 +151,7 @@ export function perlinSeed(value) {
     random = seedrandom(value.toString());
     seed(value);
 }
+
+export function rand() {
+    return random();
+}
