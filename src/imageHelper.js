@@ -12,11 +12,14 @@ export function createTextMaskImage(text, font) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    ctx.font = 'bold 150px sans-serif';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(text, MASK_SIZE / 2, MASK_SIZE / 2);
+    ctx.translate(MASK_SIZE / 2, MASK_SIZE / 2);
+    var scale = 2 / text.length;
+    ctx.scale(scale, scale);
+    ctx.font = `bold 140px ${font}`;
+    ctx.fillStyle = '#000';
+    ctx.fillText(text, 0, 0);
 
-    return ctx.getImageData(0, 0, MASK_SIZE, MASK_SIZE);
+    return ctx.canvas;
 };
 
 export function resizeImage(image, targetWidth, targetHeight) {
@@ -43,7 +46,7 @@ export function resizeImage(image, targetWidth, targetHeight) {
     return ctx.canvas;
 }
 
-export function createMaskImage(image, cutoff, inverse) {
+export function createMaskImageData(image, cutoff, inverse) {
     const canvas = resizeImage(image, MASK_SIZE, MASK_SIZE);
     const ctx = canvas.getContext('2d');
 

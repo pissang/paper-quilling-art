@@ -11,7 +11,7 @@ import debounce from 'lodash.debounce';
 import clustering from 'density-clustering';
 import clone from 'lodash.clonedeep';
 import merge from 'lodash.merge';
-import { createTextMaskImage, createMaskImage, resizeImage } from './imageHelper';
+import { createTextMaskImage, createMaskImageData, resizeImage } from './imageHelper';
 import Portrace from './dep/potrace';
 
 const BOX_SIZE = 11;
@@ -330,7 +330,16 @@ let app = application.create('#main', {
         },
 
         updateMaskImage(app) {
-            if (this._maskImageSrc === config.maskImage) {
+            // Use text as higher priority
+            if (config.maskText) {
+                this._maskImage = createTextMaskImage(config.maskText, config.maskTextFont);
+                this._maskImageData = this._maskImage.getContext('2d').getImageData(0, 0, this._maskImage.width, this._maskImage.height);
+                this._maskImageSrc = '';
+                app.methods.updateOutline();
+                return Promise.resolve();
+            }
+
+            else if (this._maskImageSrc === config.maskImage) {
                 app.methods.updateOutline();
                 return Promise.resolve(
                     this._maskImage
@@ -347,7 +356,7 @@ let app = application.create('#main', {
                     img.onload = () => {
                         this._maskImage = img;
                         // Cutoff the white
-                        this._maskImageData = createMaskImage(img, 220, true);
+                        this._maskImageData = createMaskImageData(img, 220, true);
                         this._maskImageSrc = config.maskImage;
 
                         app.methods.updateOutline();
@@ -644,6 +653,8 @@ function updateMaskImage() {
     });
 }
 
+let updateMaskImageDebounced = debounce(updateMaskImage, 700);
+
 function updateOutline() {
     app.methods.updateOutline();
     saveStates(() => {
@@ -665,14 +676,13 @@ function doUpdateScrollingPapers() {
     app.methods.updatePaperColors();
 }
 
-function updateScrollingPapersImme() {
+function updateScrollingPapers() {
     doUpdateScrollingPapers();
     saveStates(() => {
         doUpdateScrollingPapers();
     });
 }
-
-let updateScrollingPapers = debounce(updateScrollingPapersImme, 500);
+let updateScrollingPapersDebounced = debounce(updateScrollingPapers, 500);
 
 function updatePlaneColor() {
     app.methods.updatePlaneColor();
@@ -719,16 +729,16 @@ let controlKit = new ControlKit({
 let scenePanel = controlKit.addPanel({ label: 'Settings', width: 250 });
 
 scenePanel.addGroup({ label: 'Generate' })
-    .addNumberInput(config, 'thickness', { label: 'Thickness', onChange: updateScrollingPapers, step: 0.005, min: 0.01 })
-    .addNumberInput(config, 'minHeight', { label: 'Height', onChange: updateScrollingPapers, step: 0.1, min: 0.1 })
-    .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapers, step: 10, min: 50 })
-    // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapers, step: 5, min: 50 })
-    .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapers, step: 1, min: 1 })
+    .addNumberInput(config, 'thickness', { label: 'Thickness', onChange: updateScrollingPapersDebounced, step: 0.005, min: 0.01 })
+    .addNumberInput(config, 'minHeight', { label: 'Height', onChange: updateScrollingPapersDebounced, step: 0.1, min: 0.1 })
+    .addNumberInput(config, 'number', { label: 'Number', onChange: updateScrollingPapersDebounced, step: 10, min: 50 })
+    // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapersDebounced, step: 5, min: 50 })
+    .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapersDebounced, step: 1, min: 1 })
     .addCheckbox(config, 'clusterColors', { label: 'Group Color', onChange: updatePaperColors })
     .addButton('Random', function () {
         config.seed = Math.random();
 
-        updateScrollingPapersImme();
+        updateScrollingPapers();
     });
 
 scenePanel.addGroup({ label: 'Background' })
@@ -738,7 +748,8 @@ scenePanel.addGroup({ label: 'Background' })
     .addColor(config, 'planeColor', { label: 'Plane Color', colorMode: 'rgb', onChange: updatePlaneColor });
 
 scenePanel.addGroup({ label: 'Outline' })
-    .addCustomComponent(TextureUI, config, 'maskImage', { label: 'Mask', onChange: updateMaskImage })
+    .addStringInput(config, 'maskText', { label: 'Text Mask', onChange: updateMaskImageDebounced })
+    .addCustomComponent(TextureUI, config, 'maskImage', { label: 'Image Mask', onChange: updateMaskImage })
     .addNumberInput(config, 'outlineThickness', { label: 'Thickness', onChange: updateOutlineDebounced, step: 0.005, min: 0.01 })
     .addNumberInput(config, 'outlineHeight', { label: 'Height', onChange: updateOutlineDebounced, step: 0.1, min: 0.1 })
     .addColor(config, 'outlineColor', { label: 'Color', colorMode: 'rgb', onChange: updateOutlineColor });
