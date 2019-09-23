@@ -47,7 +47,7 @@ Shader.import(standardExtCode);
 let shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext'));
 let shadowShader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext_shadow'));
 
-let CONFIG_SCHEMA_VERSION = 10;
+let CONFIG_SCHEMA_VERSION = 12;
 function createDefaultConfig() {
     let config = {
 
@@ -73,6 +73,7 @@ function createDefaultConfig() {
 
         maskText: '',
         maskTextFont: 'sans-serif',
+        maskTextSize: 100,
 
         // Configuration about shadow
         shadowDirection: [0.2, 0.2],
@@ -277,7 +278,8 @@ let app = application.create('#main', {
 
         this._dirLight = app.createDirectionalLight([0, 0, 0], '#fff', 0.7);
         this._dirLight.shadowResolution = 1024;
-        this._dirLight.shadowBias = 0.001;
+        this._dirLight.shadowBias = 0.01;
+        this._dirLight.shadowSlopeScale = 1;
 
 
         this._groundPlane = app.createPlane({
@@ -343,7 +345,7 @@ let app = application.create('#main', {
         updateMaskImage(app) {
             // Use text as higher priority
             if (config.maskText) {
-                this._maskImage = createTextMaskImage(config.maskText, config.maskTextFont);
+                this._maskImage = createTextMaskImage(config.maskText, config.maskTextFont, config.maskTextSize);
                 this._maskImageData = this._maskImage.getContext('2d').getImageData(0, 0, this._maskImage.width, this._maskImage.height);
                 this._maskImageSrc = '__text_placeholder__';
                 app.methods.updateOutline();
@@ -786,6 +788,7 @@ scenePanel.addGroup({ label: 'Background' })
 
 scenePanel.addGroup({ label: 'Outline' })
     .addStringInput(config, 'maskText', { label: 'Text Mask', onChange: updateMaskImageDebounced })
+    .addNumberInput(config, 'maskTextSize', { label: 'Text Size', onChange: updateMaskImageDebounced, min: 12, step: 2 })
     .addCustomComponent(TextureUI, config, 'maskImage', { label: 'Image Mask', onChange: updateMaskImage })
     .addNumberInput(config, 'outlineThickness', { label: 'Thickness', onChange: updateOutlineDebounced, step: 0.005, min: 0.01 })
     .addNumberInput(config, 'outlineHeight', { label: 'Height', onChange: updateOutlineDebounced, step: 0.1, min: 0.1 })

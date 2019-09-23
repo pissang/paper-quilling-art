@@ -7,7 +7,7 @@ function createCtx(width, height) {
     canvas.height = height;
     return ctx;
 }
-export function createTextMaskImage(text, font) {
+export function createTextMaskImage(text, font, fontSize) {
     const ctx = createCtx(MASK_SIZE, MASK_SIZE);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -15,7 +15,7 @@ export function createTextMaskImage(text, font) {
     ctx.translate(MASK_SIZE / 2, MASK_SIZE / 2);
     var scale = 2 / text.length;
     ctx.scale(scale, scale);
-    ctx.font = `bold 140px ${font}`;
+    ctx.font = `bold ${fontSize}px ${font}`;
     ctx.fillStyle = '#000';
     ctx.fillText(text, 0, 0);
 

@@ -32,6 +32,6 @@
   },
   "devDependencies": {
     "text-loader": "0.0.1",
-    "webpack": "^3.11.0"
+    "webpack": "^4.40.2"
   }
 }
