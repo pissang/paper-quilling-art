@@ -47,7 +47,7 @@ Shader.import(standardExtCode);
 let shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext'));
 let shadowShader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext_shadow'));
 
-let CONFIG_SCHEMA_VERSION = 15;
+let CONFIG_SCHEMA_VERSION = 16;
 function createDefaultConfig() {
     let config = {
 
@@ -60,6 +60,10 @@ function createDefaultConfig() {
         cameraAlpha: 0,
         cameraBeta: 0,
         cameraDistance: 12,
+
+        // Visibility
+        paperVisible: true,
+        outlineVisible: true,
 
         // Generate
         seed: Math.random(),
@@ -92,6 +96,8 @@ function createDefaultConfig() {
         backgroundColor: [48, 48, 48],
 
         shadowIntensity: 0.8,
+        shadowColor: [0, 0, 0],
+
         planeColor: [0, 63, 97],
         showPlane: true,
         // Configuration about texture
@@ -296,7 +302,7 @@ let app = application.create('#main', {
         });
         this._groundMaterial = this._groundPlane.material;
 
-        this._groundShadowMaterial = new Material({ shader: shadowShader });
+        this._groundShadowMaterial = new Material({ shader: shadowShader, transparent: true });
         this._groundPlane.scale.set(11, 11, 1);
         this._groundPlane.geometry.generateTangents();
         this._rootNode.add(this._groundPlane);
@@ -336,6 +342,7 @@ let app = application.create('#main', {
         app.methods.updateMaskImage().then(() => {
             app.methods.updateScrollingPapers();
             app.methods.changePaperDetailTexture(app);
+            app.methods.updatePaperVisibility();
         });
 
         app.methods.updateCamera();
@@ -572,6 +579,15 @@ let app = application.create('#main', {
             this._advancedRenderer.render();
         },
 
+        updatePaperVisibility() {
+            this._paperMesh.invisible = !config.paperVisible;
+            if (this._outlineMesh) {
+                this._outlineMesh.invisible = !config.outlineVisible;
+            }
+            this._advancedRenderer.render();
+        },
+
+
         showPlane() {
             this._groundPlane.material = this._groundMaterial;
             this._groundPlane.scale.set(BOX_SIZE, BOX_SIZE, 1);
@@ -588,6 +604,7 @@ let app = application.create('#main', {
             config.showPlane ? app.methods.showPlane() : app.methods.hidePlane();
             app.methods.updatePlaneColor();
             this._groundPlane.material.set('shadowIntensity', config.shadowIntensity);
+            this._groundPlane.material.set('shadowColor', config.shadowColor.map(rgb => rgb / 255));
         },
 
         updatePaperColorsAndHeights(app, onlyUpdateHeight) {
@@ -769,24 +786,24 @@ function updateShadow() {
     });
 }
 
-function doUpdateBackgroundAndBase() {
+function doUpdateBackgroundAndPlane() {
     document.body.querySelector('#main').style.backgroundColor = 'rgb(' + config.backgroundColor.join(',') + ')';
     app.methods.updatePlane();
 }
-function updateBackgroundAndBase() {
-    doUpdateBackgroundAndBase();
+function updateBackgroundAndPlane() {
+    doUpdateBackgroundAndPlane();
     saveStates(() => {
-        doUpdateBackgroundAndBase();
+        doUpdateBackgroundAndPlane();
     });
 }
-doUpdateBackgroundAndBase();
+doUpdateBackgroundAndPlane();
 
 let controlKit = new ControlKit({
     loadAndSave: false,
     useExternalStyle: true
 });
 
-let scenePanel = controlKit.addPanel({ label: 'Settings', width: 250 });
+let scenePanel = controlKit.addPanel({ label: 'Settings', width: 280 });
 
 scenePanel.addGroup({label: 'Control'})
     .addCheckbox(config, 'enableSpin', { label: 'Enable Spin' })
@@ -809,6 +826,7 @@ scenePanel.addGroup({ label: 'Generate' })
     // .addNumberInput(config, 'trail', { label: 'Trail', onChange: updateScrollingPapersDebounced, step: 5, min: 50 })
     .addNumberInput(config, 'noiseScale', { label: 'Noise Scale', onChange: updateScrollingPapersDebounced, step: 1, min: 1 })
     .addCheckbox(config, 'clusterColors', { label: 'Group Color', onChange: updatePaperColors })
+    .addCheckbox(config, 'paperVisible', { label: 'Visible', onChange: app.methods.updatePaperVisibility })
     .addButton('Random', function () {
         config.seed = Math.random();
 
@@ -816,9 +834,10 @@ scenePanel.addGroup({ label: 'Generate' })
     });
 
 scenePanel.addGroup({ label: 'Background' })
-    .addColor(config, 'backgroundColor', { label: 'Background', colorMode: 'rgb', onChange: updateBackgroundAndBase })
-    .addSlider(config, 'shadowIntensity', '$normalizedRange', { label: 'Shadow', onChange: updateBackgroundAndBase })
-    .addCheckbox(config, 'showPlane', { label: 'Plane', onChange: updateBackgroundAndBase})
+    .addColor(config, 'backgroundColor', { label: 'Background', colorMode: 'rgb', onChange: updateBackgroundAndPlane })
+    .addSlider(config, 'shadowIntensity', '$normalizedRange', { label: 'Shadow', onChange: updateBackgroundAndPlane })
+    .addColor(config, 'shadowColor', { label: 'Shadow Color', colorMode: 'rgb', onChange: updateBackgroundAndPlane })
+    .addCheckbox(config, 'showPlane', { label: 'Plane', onChange: updateBackgroundAndPlane})
     .addColor(config, 'planeColor', { label: 'Plane Color', colorMode: 'rgb', onChange: updatePlaneColor });
 
 scenePanel.addGroup({ label: 'Mask' })
@@ -827,7 +846,8 @@ scenePanel.addGroup({ label: 'Mask' })
     .addCustomComponent(TextureUI, config, 'maskImage', { label: 'Image Mask', onChange: updateMaskImage })
     .addNumberInput(config, 'outlineThickness', { label: 'Thickness', onChange: updateOutlineDebounced, step: 0.005, min: 0.01 })
     .addNumberInput(config, 'outlineHeight', { label: 'Height', onChange: updateOutlineDebounced, step: 0.1, min: 0.1 })
-    .addColor(config, 'outlineColor', { label: 'Color', colorMode: 'rgb', onChange: updateOutlineColor });
+    .addColor(config, 'outlineColor', { label: 'Color', colorMode: 'rgb', onChange: updateOutlineColor })
+    .addCheckbox(config, 'outlineVisible', { label: 'Visible', onChange: app.methods.updatePaperVisibility });
 
 scenePanel.addGroup({ label: 'Details', enable: false })
     .addCustomComponent(TextureUI, config, 'paperDetail', { label: 'Detail', onChange: changePaperDetailTexture })

@@ -566,6 +566,7 @@ void main() {
 uniform mat4 viewInverse : VIEWINVERSE;
 
 uniform float shadowIntensity: 0.8;
+uniform vec3 shadowColor: [0, 0, 0];
 #ifdef SSAOMAP_ENABLED
 // For ssao prepass
 uniform sampler2D ssaoMap;
@@ -610,7 +611,7 @@ void main() {
 
     shadowFactor *= aoFactor;
 
-    gl_FragColor = vec4(0.0, 0.0, 0.0, (1.0 - shadowFactor) * shadowIntensity);
+    gl_FragColor = vec4(shadowColor, (1.0 - shadowFactor) * shadowIntensity);
 }
 
 @end
