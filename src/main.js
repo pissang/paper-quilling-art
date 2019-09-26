@@ -1,5 +1,5 @@
 import ClayAdvancedRenderer from 'claygl-advanced-renderer';
-import { application, Vector3, util, Shader, Node, Geometry, Mesh, Material, plugin } from 'claygl';
+import { application, Vector3, util, Shader, Node, Geometry, Mesh, Material, plugin, camera } from 'claygl';
 import { parse, stringify, lerp } from 'zrender/src/tool/color';
 import TextureUI from './ui/Texture';
 import * as colorBrewer from 'd3-scale-chromatic';
@@ -47,12 +47,21 @@ Shader.import(standardExtCode);
 let shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext'));
 let shadowShader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext_shadow'));
 
-let CONFIG_SCHEMA_VERSION = 12;
+let CONFIG_SCHEMA_VERSION = 15;
 function createDefaultConfig() {
     let config = {
 
         version: CONFIG_SCHEMA_VERSION,
 
+        enableSpin: true,
+
+        spinAngle: 0,
+
+        cameraAlpha: 0,
+        cameraBeta: 0,
+        cameraDistance: 12,
+
+        // Generate
         seed: Math.random(),
 
         thickness: 0.01,
@@ -62,7 +71,6 @@ function createDefaultConfig() {
         number: 800,
         trail: 100,
         noiseScale: 3,
-
 
         // Configuration about mask
         maskImage: '',
@@ -79,10 +87,6 @@ function createDefaultConfig() {
         shadowDirection: [0.2, 0.2],
         shadowKernelSize: 16,
         shadowBlurSize: 4,
-
-        cameraAlpha: 0,
-        cameraBeta: 0,
-        cameraDistance: 12,
 
         // Ground and background
         backgroundColor: [48, 48, 48],
@@ -312,9 +316,7 @@ let app = application.create('#main', {
             timeline: app.timeline,
             damping: 0
         });
-        control.setAlpha(config.cameraAlpha);
-        control.setBeta(config.cameraBeta);
-        control.setDistance(config.cameraDistance);
+        this._control = control;
 
         control.on('update', () => {
             this._advancedRenderer.render();
@@ -331,6 +333,9 @@ let app = application.create('#main', {
             app.methods.updateScrollingPapers();
             app.methods.changePaperDetailTexture(app);
         });
+
+        app.methods.updateCamera();
+        app.methods.updateSpin();
     },
 
     loop() {
@@ -339,6 +344,19 @@ let app = application.create('#main', {
 
     methods: {
         render() {
+            this._advancedRenderer.render();
+        },
+
+        updateCamera() {
+            this._control.setAlpha(config.cameraAlpha);
+            this._control.setBeta(config.cameraBeta);
+            this._control.setDistance(config.cameraDistance);
+            this._advancedRenderer.render();
+        },
+
+        updateSpin() {
+            this._rootNode.rotation.identity();
+            this._rootNode.rotation.rotateZ(config.spinAngle);
             this._advancedRenderer.render();
         },
 
@@ -766,6 +784,19 @@ let controlKit = new ControlKit({
 
 let scenePanel = controlKit.addPanel({ label: 'Settings', width: 250 });
 
+scenePanel.addGroup({label: 'Control'})
+    .addCheckbox(config, 'enableSpin', { label: 'Enable Spin' })
+    .addButton('Reset Spin', function () {
+        config.spinAngle = 0;
+        app.methods.updateSpin();
+    })
+    .addButton('Reset Camera', function () {
+        config.cameraAlpha = 0;
+        config.cameraBeta = 0;
+        camera.cameraDistance = 0;
+        app.methods.updateCamera();
+    });
+
 scenePanel.addGroup({ label: 'Generate' })
     .addNumberInput(config, 'thickness', { label: 'Thickness', onChange: updateScrollingPapersDebounced, step: 0.005, min: 0.01 })
     .addNumberInput(config, 'minHeight', { label: 'Min Height', onChange: updatePaperHeights, step: 0.1, min: 0.1 })
@@ -786,7 +817,7 @@ scenePanel.addGroup({ label: 'Background' })
     .addCheckbox(config, 'showPlane', { label: 'Plane', onChange: updateBackgroundAndBase})
     .addColor(config, 'planeColor', { label: 'Plane Color', colorMode: 'rgb', onChange: updatePlaneColor });
 
-scenePanel.addGroup({ label: 'Outline' })
+scenePanel.addGroup({ label: 'Mask' })
     .addStringInput(config, 'maskText', { label: 'Text Mask', onChange: updateMaskImageDebounced })
     .addNumberInput(config, 'maskTextSize', { label: 'Text Size', onChange: updateMaskImageDebounced, min: 12, step: 2 })
     .addCustomComponent(TextureUI, config, 'maskImage', { label: 'Image Mask', onChange: updateMaskImage })
@@ -828,5 +859,32 @@ colorGroup.addButton('Revert Colors', function () {
 });
 
 window.addEventListener('resize', function () { app.resize(); app.methods.render(); } );
+
+let spinning = false;
+let prevX = 0;
+app.renderer.canvas.addEventListener('mousedown', e => {
+    if (e.button === 2 && config.enableSpin) {   // Right mouse
+        spinning = true;
+        prevX = e.clientX;
+    }
+});
+window.addEventListener('mousemove', e => {
+    if (spinning) {   // Right mouse
+        let x = e.clientX;
+        let dx = x - prevX;
+        prevX = x;
+
+        config.spinAngle += dx / 360;
+        app.methods.updateSpin();
+    }
+});
+window.addEventListener('mouseup', e => {
+    spinning = false;
+});
+app.renderer.canvas.addEventListener('contextmenu', e => {
+    if (config.enableSpin) {
+        e.preventDefault();
+    }
+});
 
 document.getElementById('loading').style.display = 'none';
