@@ -244,6 +244,10 @@ let app = application.create('#main', {
 
     autoRender: false,
 
+    glAttributes: {
+        preserveDrawingBuffer: true
+    },
+
     devicePixelRatio: 1,
 
     init(app) {
@@ -860,6 +864,8 @@ colorGroup.addButton('Revert Colors', function () {
 
 window.addEventListener('resize', function () { app.resize(); app.methods.render(); } );
 
+
+// Spin handlers.
 let spinning = false;
 let prevX = 0;
 app.renderer.canvas.addEventListener('mousedown', e => {
@@ -886,5 +892,13 @@ app.renderer.canvas.addEventListener('contextmenu', e => {
         e.preventDefault();
     }
 });
+
+
+// Downloads
+document.getElementById('download').addEventListener('click', () => {
+    app.renderer.canvas.toBlob(blob => {
+        saveAs(blob, 'download.png');
+    });
+})
 
 document.getElementById('loading').style.display = 'none';
