@@ -11,7 +11,7 @@ html, body, #main {
     left: 0;
     top: 0;
     bottom: 0;
-    right: 280;
+    right: 240px;
 }
 
 
@@ -73,9 +73,9 @@ html, body, #main {
     height: 0;
     clear: both;
 }
-#controlKit .panel .group-list .group .sub-group-list .sub-group {
+/* #controlKit .panel .group-list .group .sub-group-list .sub-group {
     padding: 5px;
-}
+} */
 #controlKit .panel .group-list .group .sub-group-list .sub-group .wrap .label {
     width: 45%;
 }
@@ -100,7 +100,7 @@ html, body, #main {
 }
 .texture-wrap .texture-upload {
     display: inline-block;
-    width: 105px!important;
+    width: 69px!important;
     line-height: 25px;
     text-align: left;
     text-transform: none!important;

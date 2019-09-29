@@ -47,7 +47,7 @@ Shader.import(standardExtCode);
 let shader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext'));
 let shadowShader = new Shader(Shader.source('clay.standardMR.vertex'), Shader.source('papercut.standard_ext_shadow'));
 
-let CONFIG_SCHEMA_VERSION = 16;
+let CONFIG_SCHEMA_VERSION = 17;
 function createDefaultConfig() {
     let config = {
 
@@ -803,7 +803,7 @@ let controlKit = new ControlKit({
     useExternalStyle: true
 });
 
-let scenePanel = controlKit.addPanel({ label: 'Settings', width: 280 });
+let scenePanel = controlKit.addPanel({ label: 'Settings', width: 240 });
 
 scenePanel.addGroup({label: 'Control'})
     .addCheckbox(config, 'enableSpin', { label: 'Enable Spin' })
