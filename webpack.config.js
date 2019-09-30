@@ -1,18 +1,14 @@
 module.exports = {
-    entry: __dirname + '/src/main.js',
+    entry: {
+        main: __dirname + '/src/main.js',
+        render: __dirname + '/src/offlineRender.js'
+    },
     output: {
         path: __dirname + '/dist',
-        filename: 'bundle.js'
+        filename: '[name]-bundle.js'
     },
     module: {
         rules: [
-            // {
-            //   test: /\.js$/,
-            //   exclude: /node_modules/,
-            //   use: {
-            //     loader: 'babel-loader'
-            //   }
-            // },
             {
                 test: /\.glsl$/,
                 exclude: /node_modules/,

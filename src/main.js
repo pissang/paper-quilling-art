@@ -300,6 +300,7 @@ let app = application.create('#main', {
             shader,
             roughness: 1
         });
+        this._groundPlane.name = 'ground';
         this._groundMaterial = this._groundPlane.material;
 
         this._groundShadowMaterial = new Material({ shader: shadowShader, transparent: true });
@@ -356,6 +357,10 @@ let app = application.create('#main', {
     methods: {
         render() {
             this._advancedRenderer.render();
+        },
+
+        getCamera() {
+            return this._camera;
         },
 
         updateCamera() {
@@ -418,7 +423,7 @@ let app = application.create('#main', {
                 return;
             }
 
-            let potrace = new Portrace(resizeImage(this._maskImage, 128, 128));
+            let potrace = new Portrace(resizeImage(this._maskImage, 512, 512));
             potrace.process();
             let svgStr = potrace.getSVG(1);
             let svg = new DOMParser().parseFromString(svgStr, 'application/xml');
@@ -430,7 +435,7 @@ let app = application.create('#main', {
             // );
             document.body.appendChild(div);
 
-            let scale = [(BOX[1][0] - BOX[0][0]) / 128, (BOX[1][1] - BOX[0][1]) / 128];
+            let scale = [(BOX[1][0] - BOX[0][0]) / 512, (BOX[1][1] - BOX[0][1]) / 512];
             let translation = [BOX[0][0], BOX[0][1]];
 
             let pathAll = svg.querySelectorAll('path');
@@ -919,6 +924,62 @@ document.getElementById('download').addEventListener('click', () => {
     app.renderer.canvas.toBlob(blob => {
         saveAs(blob, 'download.png');
     });
-})
+});
+
+// Offline render
+document.getElementById('render').addEventListener('click', () => {
+    let renderWindow = window.open('./render.html', 'Render', 'width=1280,height=800');
+    // Post message
+    
+    renderWindow.addEventListener('message', e => {
+        let transferables = [];
+        let objects = [];
+
+        app.scene.traverse(obj => {
+            if (obj.geometry && !obj.invisible 
+                && obj.name !== 'ground'    // Exclude ground.
+            ) {
+                let geo = obj.geometry;
+                let position = geo.attributes.position.value.slice();
+                let uv = geo.attributes.texcoord0.value.slice();
+                let normal = geo.attributes.normal.value.slice();
+                let color = geo.attributes.color.value && geo.attributes.color.value.slice();
+                let indices = geo.indices.slice();
+
+                let transform = obj.worldTransform.toArray();
+
+                objects.push({
+                    attributes: {
+                        position,
+                        uv,
+                        color,
+                        normal
+                    },
+                    transform,
+                    indices
+                });
+                transferables.push(
+                    position.buffer,
+                    uv.buffer,
+                    normal.buffer,
+                    indices.buffer
+                );
+                if (color) {
+                    transferables.push(color.buffer);
+                }
+            }
+        });
+
+        if (e.data.type === 'prepared') {
+            renderWindow.postMessage({
+                objects,
+                camera: {
+                    transform: app.methods.getCamera().worldTransform.toArray()
+                }
+            }, '*', transferables)
+        }
+    });
+});
+
 
 document.getElementById('loading').style.display = 'none';

@@ -126,7 +126,7 @@ export function generatePerlin(min, max, number, trail, noiseScale, maskImage, o
         count = iter = 0;
         // Add more points
         while (count < number / 5
-            && iter < 1e6   // Safe protection
+            && iter < 1e5   // Safe protection
         ) {
             iter++;
             let idx = Math.round(random() * outlinePointsCount - 1);
