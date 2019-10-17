@@ -36,19 +36,19 @@ const envMap = new RGBELoader().load('img/canyon.hdr', () => {
     });
 });
 if (RAY_TRACING) {
-    const envLlight = new EnvironmentLight(envMap);
-    const mainLight = new SoftDirectionalLight(0xffffff, 5, 1);
+    const envLlight = new EnvironmentLight(envMap, 0xffffff, 5);
+    const mainLight = new SoftDirectionalLight(0xffffff, 1, 1);
     mainLight.position.set(1, 1, 2);
 
     // Env Light will cause firefly
-    // scene.add(envLlight);
-    scene.add(mainLight);
+    scene.add(envLlight);
+    // scene.add(mainLight);
 }
 else {
     const mainLight = new THREE.DirectionalLight();
     const ambientLight = new THREE.HemisphereLight();
     scene.add(mainLight);
-    scene.add(ambientLight)
+    scene.add(ambientLight);
 }
 
 renderer.gammaOutput = true;
@@ -120,7 +120,7 @@ window.addEventListener('message', function (e) {
             for (let i = 0; i < vertexColor.length / 3; i++) {
                 let i3 = i * 3;
                 let i4 = i * 4;
-                
+
                 for (let k = 0; k < 3; k++) {
                     vertexColor[i3 + k] = obj.attributes.color[i4 + k];
                 }
@@ -134,7 +134,7 @@ window.addEventListener('message', function (e) {
             map = new THREE.CanvasTexture(canvas);
             map.minFilter = THREE.NearestFilter;
             map.magFilter = THREE.NearestFilter;
-            
+
         }
         else {
             bufferGeo.addAttribute('uv', new THREE.BufferAttribute(obj.attributes.uv, 2));

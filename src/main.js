@@ -469,7 +469,8 @@ let app = application.create('#main', {
 
             let {indices, position, normal, uv} = extrudePolyline(polylines, {
                 // TODO Configuration
-                lineWidth: config.outlineThickness, depth: config.outlineHeight
+                lineWidth: config.outlineThickness, depth: config.outlineHeight,
+                smoothSide: true
             });
             if (this._outlineMesh.geometry) {
                 this._outlineMesh.geometry.dispose(this._renderer);
@@ -535,7 +536,8 @@ let app = application.create('#main', {
                 // let {indices, position, normal} = extrude(polyline, 1);
                 let {indices, position, normal, uv} = extrudePolyline([polyline], {
                     // TODO Configuration
-                    lineWidth: config.thickness, depth: 1
+                    lineWidth: config.thickness, depth: 1,
+                    smoothSide: true
                 });
                 geometryData.push({
                     indices, position, normal, uv,
@@ -928,15 +930,15 @@ document.getElementById('download').addEventListener('click', () => {
 
 // Offline render
 document.getElementById('render').addEventListener('click', () => {
-    let renderWindow = window.open('./render.html', 'Render', 'width=1280,height=800');
+    let renderWindow = window.open('./render.html', 'Render', 'width=1280,height=720');
     // Post message
-    
+
     renderWindow.addEventListener('message', e => {
         let transferables = [];
         let objects = [];
 
         app.scene.traverse(obj => {
-            if (obj.geometry && !obj.invisible 
+            if (obj.geometry && !obj.invisible
                 && obj.name !== 'ground'    // Exclude ground.
             ) {
                 let geo = obj.geometry;
