@@ -10,14 +10,17 @@ window.THREE = THREE;
 // THREE.EnvironmentLight = EnvironmentLight;
 // THREE.SoftDirectionalLight = SoftDirectionalLight;
 
+const width = 1920;
+const height = 1080;
+
 const scene = new THREE.Scene();
 const renderer = new (RAY_TRACING ? RayTracingRenderer : THREE.WebGLRenderer)({
     canvas: document.querySelector('canvas')
 });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(width, height);
 
 const camera = new THREE.PerspectiveCamera();
-camera.aspect = window.innerWidth / window.innerHeight;
+camera.aspect = width / height;
 camera.position.set(0, 0, 5);
 
 
