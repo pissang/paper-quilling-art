@@ -7,8 +7,8 @@ import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader';
 const RAY_TRACING = true;
 
 window.THREE = THREE;
-THREE.EnvironmentLight = EnvironmentLight;
-THREE.SoftDirectionalLight = SoftDirectionalLight;
+// THREE.EnvironmentLight = EnvironmentLight;
+// THREE.SoftDirectionalLight = SoftDirectionalLight;
 
 const scene = new THREE.Scene();
 const renderer = new (RAY_TRACING ? RayTracingRenderer : THREE.WebGLRenderer)({

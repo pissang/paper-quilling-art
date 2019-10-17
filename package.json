@@ -26,6 +26,7 @@
     "lodash.clonedeep": "^4.5.0",
     "lodash.debounce": "^4.0.8",
     "lodash.merge": "^4.6.2",
+    "ray-tracing-renderer": "git+https://github.com/hoverinc/ray-tracing-renderer.git",
     "seedrandom": "^3.0.5",
     "simplex-noise": "^2.4.0",
     "three": "^0.108.0",
