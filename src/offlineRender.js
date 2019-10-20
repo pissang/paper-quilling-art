@@ -26,7 +26,12 @@ camera.position.set(0, 0, 5);
 
 function init() {
     function render() {
-        renderer.render(scene, camera);
+        try {
+            renderer.render(scene, camera);
+        }
+        catch(e) {
+            alert('Render failed. Please use \'random\' button to regenerate and render again.');
+        }
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render);

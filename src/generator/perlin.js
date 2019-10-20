@@ -23,7 +23,7 @@ function getIdx(px, py, imageWidth, imageHeight) {
 
 function lineGenerator(x, y, min, max, trail, noiseScale, maskImage) {
     let jitter = Math.random() / 20;
-    let points = [[x, y]];
+    let points = [];
     let pixels = maskImage && maskImage.data;
     let imageWidth = maskImage && maskImage.width;
     let imageHeight = maskImage && maskImage.height;
@@ -45,8 +45,8 @@ function lineGenerator(x, y, min, max, trail, noiseScale, maskImage) {
         }
 
         if (randomInPixels) {
-            let px = (x - min[0]) / width;
-            let py = (y - min[1]) / height;
+            let px = (x + jitter - min[0]) / width;
+            let py = (y + jitter - min[1]) / height;
             let idx = getIdx(px, py, imageWidth, imageHeight);
             let a = pixels[idx * 4 + 3];
             if (a < ALPHA_THRESHOLD) {
