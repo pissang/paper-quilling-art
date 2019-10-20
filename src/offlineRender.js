@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader';
 
 const RAY_TRACING = true;
+const TOTAL_SAMPLES = 200;
 
 window.THREE = THREE;
 // THREE.EnvironmentLight = EnvironmentLight;
@@ -23,9 +24,13 @@ const camera = new THREE.PerspectiveCamera();
 camera.aspect = width / height;
 camera.position.set(0, 0, 5);
 
+let finished = false;
 
 function init() {
     function render() {
+        if (finished) {
+            return;
+        }
         try {
             renderer.render(scene, camera);
         }
@@ -63,6 +68,21 @@ renderer.gammaOutput = true;
 renderer.gammaFactor = 2.2;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.5;
+
+renderer.onSampleRendered = samples => {
+    let progressDiv = document.querySelector('#progress');
+    let statusDiv = document.querySelector('#status');
+    if (samples > TOTAL_SAMPLES) {
+        finished = true;
+        progressDiv && (progressDiv.style.display = 'none');
+        statusDiv && (statusDiv.style.display = 'none');
+    }
+    let progress = Math.round(
+        samples / TOTAL_SAMPLES * 70 + 30
+    );
+    progressDiv && (progressDiv.style.width = progress + '%');
+    statusDiv && (statusDiv.innerHTML = 'RENDERING');
+};
 
 
 function packVertexColorToTexture(color) {

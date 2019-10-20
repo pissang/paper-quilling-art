@@ -10,8 +10,27 @@
         body {
             margin: 0;
         }
+        #progress {
+            background: rgb(37, 106, 168);
+            height: 5px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            transition: 500ms cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+        #status {
+            color: #fff;
+            width: 100%;
+            top: 10px;
+            font-size: 16px;
+            position: absolute;
+            text-align: center;
+            font-family: sans-serif;
+        }
     </style>
     <canvas></canvas>
+    <div id="progress"></div>
+    <div id="status">PREPARING</div>
     <script src="dist/render-bundle.js"></script>
 </body>
 </html>
