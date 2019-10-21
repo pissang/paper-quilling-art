@@ -142,7 +142,7 @@ window.addEventListener('message', function (e) {
         bufferGeo.addAttribute('position', new THREE.BufferAttribute(obj.attributes.position, 3));
         bufferGeo.addAttribute('normal', new THREE.BufferAttribute(obj.attributes.normal, 3));
 
-        let map = null
+        let map = null;
         if (obj.attributes.color) {
             let vertexColor = new Float32Array(obj.attributes.color.length / 4 * 3);
             for (let i = 0; i < vertexColor.length / 3; i++) {
@@ -173,6 +173,7 @@ window.addEventListener('message', function (e) {
         let transform = obj.transform;
         let mesh = new THREE.Mesh(bufferGeo, new THREE.MeshStandardMaterial({
             roughness: 1,
+            color: new THREE.Color(obj.material.color[0], obj.material.color[1], obj.material.color[2]),
             map
         }));
         mesh.matrix.fromArray(transform);
@@ -186,9 +187,9 @@ window.addEventListener('message', function (e) {
     // Add ground
     let ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(), new THREE.MeshStandardMaterial({
         roughness: 1,
-        color: 0xaaaaaa
+        color: new THREE.Color(e.data.plane.color[0], e.data.plane.color[1], e.data.plane.color[2]),
     }));
-    ground.scale.set(50, 50, 1);
+    ground.scale.set(100, 100, 1);
     scene.add(ground);
 
     init();

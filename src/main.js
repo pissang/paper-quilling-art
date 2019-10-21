@@ -277,9 +277,6 @@ let app = application.create('#main', {
                     radius: 1,
                     intensity: 1.2,
                     quality: 'high'
-                },
-                screenSpaceReflection: {
-                    enable: false
                 }
             }
         });
@@ -300,7 +297,7 @@ let app = application.create('#main', {
             shader,
             roughness: 1
         });
-        this._groundPlane.name = 'ground';
+        this._groundPlane.name = 'plane';
         this._groundMaterial = this._groundPlane.material;
 
         this._groundShadowMaterial = new Material({ shader: shadowShader, transparent: true });
@@ -336,7 +333,7 @@ let app = application.create('#main', {
             config.cameraDistance = control.getDistance();
         });
 
-        app.createAmbientCubemapLight('img/hall.hdr', 0.01, 1, 2);
+        app.createAmbientCubemapLight('img/canyon.hdr', 0.01, 1, 2);
 
         app.methods.updatePlaneColor();
 
@@ -939,7 +936,7 @@ document.getElementById('render').addEventListener('click', () => {
 
         app.scene.traverse(obj => {
             if (obj.geometry && !obj.invisible
-                && obj.name !== 'ground'    // Exclude ground.
+                && obj.name !== 'plane'    // Exclude ground.
             ) {
                 let geo = obj.geometry;
                 let position = geo.attributes.position.value.slice();
@@ -956,6 +953,9 @@ document.getElementById('render').addEventListener('click', () => {
                         uv,
                         color,
                         normal
+                    },
+                    material: {
+                        color: obj.material.get('color')
                     },
                     transform,
                     indices
@@ -975,10 +975,13 @@ document.getElementById('render').addEventListener('click', () => {
         if (e.data.type === 'prepared') {
             renderWindow.postMessage({
                 objects,
+                plane: {
+                    color: config.planeColor.map(c => c / 255)
+                },
                 camera: {
                     transform: app.methods.getCamera().worldTransform.toArray()
                 }
-            }, '*', transferables)
+            }, '*', transferables);
         }
     });
 });
