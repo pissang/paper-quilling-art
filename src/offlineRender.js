@@ -1,8 +1,9 @@
-import {RayTracingRenderer} from 'three.js-ray-tracing-renderer';
-import {EnvironmentLight} from 'three.js-ray-tracing-renderer/src/EnvironmentLight';
-import {SoftDirectionalLight} from 'three.js-ray-tracing-renderer/src/SoftDirectionalLight';
+import {RayTracingRenderer} from 'ray-tracing-renderer';
+import {EnvironmentLight} from 'ray-tracing-renderer/src/EnvironmentLight';
+import {SoftDirectionalLight} from 'ray-tracing-renderer/src/SoftDirectionalLight';
 import * as THREE from 'three';
 import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader';
+import {initDenoiseScene, denoise} from './denoise';
 
 const RAY_TRACING = true;
 const TOTAL_SAMPLES = 200;
@@ -11,22 +12,42 @@ window.THREE = THREE;
 // THREE.EnvironmentLight = EnvironmentLight;
 // THREE.SoftDirectionalLight = SoftDirectionalLight;
 
-const width = 1920;
-const height = 1080;
+const WIDTH = 1920;
+const HEIGHT = 1080;
 
 const scene = new THREE.Scene();
+const offlineRenderCanvas = document.createElement('canvas');
+if (RAY_TRACING) {
+    // create context here TODO
+    offlineRenderCanvas.getContext('webgl2', {
+        alpha: false,
+        depth: false,
+        stencil: false,
+        antialias: false,
+        powerPreference: 'high-performance',
+        preserveDrawingBuffer: true,
+        failIfMajorPerformanceCaveat: true
+    });
+}
 const renderer = new (RAY_TRACING ? RayTracingRenderer : THREE.WebGLRenderer)({
-    canvas: document.querySelector('canvas')
+    canvas: offlineRenderCanvas
 });
-renderer.setSize(width, height);
+renderer.setSize(WIDTH, HEIGHT);
 
 const camera = new THREE.PerspectiveCamera();
-camera.aspect = width / height;
+camera.aspect = WIDTH / HEIGHT;
 camera.position.set(0, 0, 5);
+camera.updateProjectionMatrix();
 
 let finished = false;
 
 function init() {
+
+    if (RAY_TRACING) {
+        let canvas = initDenoiseScene(scene, camera, WIDTH, HEIGHT);
+        document.querySelector('#viewport').appendChild(canvas);
+    }
+
     function render() {
         if (finished) {
             return;
@@ -35,7 +56,9 @@ function init() {
             renderer.render(scene, camera);
         }
         catch(e) {
+            console.log(e);
             alert('Render failed. Please use \'random\' button to regenerate and render again.');
+            return;
         }
         requestAnimationFrame(render);
     }
@@ -47,6 +70,21 @@ const envMap = new RGBELoader().load('img/canyon.hdr', () => {
     window.postMessage({
         type: 'prepared'
     });
+
+    // Test scene
+    if (!window.opener) {
+        let sphere = new THREE.Mesh(new THREE.SphereBufferGeometry(1, 50, 50), new THREE.MeshStandardMaterial({
+            color: 0x0000ff
+        }));
+        sphere.position.x = -1;
+        let cube = new THREE.Mesh(new THREE.TorusBufferGeometry(), new THREE.MeshStandardMaterial({
+            color: 0xff0000
+        }));
+        cube.position.x = 0.5;
+        scene.add(sphere);
+        scene.add(cube);
+        init();
+    }
 });
 if (RAY_TRACING) {
     const envLlight = new EnvironmentLight(envMap, 0xffffff, 5);
@@ -82,6 +120,9 @@ renderer.onSampleRendered = samples => {
     );
     progressDiv && (progressDiv.style.width = progress + '%');
     statusDiv && (statusDiv.innerHTML = 'RENDERING');
+
+    // Do Denoise
+    denoise(offlineRenderCanvas);
 };
 
 
@@ -189,6 +230,7 @@ window.addEventListener('message', function (e) {
         roughness: 1,
         color: new THREE.Color(e.data.plane.color[0], e.data.plane.color[1], e.data.plane.color[2]),
     }));
+    // ground.material.shadowCatcher = true;
     ground.scale.set(100, 100, 1);
     scene.add(ground);
 

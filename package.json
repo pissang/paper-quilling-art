@@ -30,7 +30,6 @@
     "seedrandom": "^3.0.5",
     "simplex-noise": "^2.4.0",
     "three": "^0.108.0",
-    "three.js-ray-tracing-renderer": "git+https://github.com/hoverinc/ray-tracing-renderer.git",
     "zrender": "^4.0.3"
   },
   "devDependencies": {
