@@ -1,3 +1,5 @@
+// https://www.shadertoy.com/view/ldKBzG
+
 export var denoiseVert = `
 varying vec2 vUv;
 void main() {
@@ -7,14 +9,24 @@ void main() {
 `;
 
 export var denoiseFrag = `
-float denoiseStrength = 1.0;
-uniform sampler2D tInput;
+uniform sampler2D tDiffuse;
 uniform sampler2D tNormal;
 uniform sampler2D tDepth;
+uniform float strength;
+
+uniform mat4 projectionInv;
 
 uniform vec2 size;
 
 varying vec2 vUv;
+
+uniform float separator;
+
+vec3 fetchPos(vec2 uv) {
+    vec4 projected = vec4(uv * 2.0 - 1.0, texture2D(tDepth, uv).r * 2.0 - 1.0, 1.0);
+    vec4 pos = projectionInv * projected;
+    return pos.xyz / pos.w;
+}
 
 void main() {
     vec2 offset[25];
@@ -82,34 +94,34 @@ void main() {
 
     vec4 sum = vec4(0.0);
     float c_phi = 1.0;
-    float n_phi = 0.5;
-    float p_phi = 0.3;
-	vec4 cval = texture2D(tInput, vUv);
-	vec4 nval = texture2D(tNormal, vUv);
-	vec4 pval = texture2D(tDepth, vUv);
+    float n_phi = 2.0;
+    float p_phi = 0.5;
+	vec4 cval = texture2D(tDiffuse, vUv);
+	vec3 nval = texture2D(tNormal, vUv).xyz;
+	vec3 pval = fetchPos(vUv);
 
     float cum_w = 0.0;
     for(int i = 0; i < 25; i++)
     {
-        vec2 uv = vUv + offset[i] / vec2(1920.0, 1280.0) * denoiseStrength;
+        vec2 uv = vUv + offset[i] / size * strength;
 
-        vec4 ctmp = texture2D(tInput, uv);
+        vec4 ctmp = texture2D(tDiffuse, uv);
         vec4 t = cval - ctmp;
         float dist2 = dot(t,t);
-        float c_w = min(exp(-(dist2)/c_phi), 1.0);
+        float c_w = min(exp(-(dist2) / c_phi), 1.0);
 
-        vec4 ntmp = texture2D(tNormal, uv);
-        t = nval - ntmp;
-        dist2 = max(dot(t, t), 0.0);
+        vec3 ntmp = texture2D(tNormal, uv).xyz;
+        vec3 t2 = nval - ntmp;
+        dist2 = max(dot(t2, t2), 0.0);
         float n_w = min(exp(-(dist2) / n_phi), 1.0);
 
-        vec4 ptmp = texture2D(tDepth, vUv);
-        t = pval - ptmp;
-        dist2 = dot(t,t);
-        float p_w = min(exp(-(dist2)/p_phi), 1.0);
+        vec3 ptmp = fetchPos(vUv);
+        t2 = pval - ptmp;
+        dist2 = dot(t2, t2);
+        float p_w = min(exp(-(dist2) / p_phi), 1.0);
 
         //float weight = c_w*n_w*p_w;
-        float weight = c_w * n_w;
+        float weight = c_w * n_w * p_w;
         sum += ctmp * weight * kernel[i];
         cum_w += weight * kernel[i];
     }
@@ -124,8 +136,12 @@ void main() {
     //     gl_FragColor = sum / cum_w;
     // }
 
+
     if (vUv.x < 0.5) {
         gl_FragColor = cval;
+    }
+    else if (vUv.x < 0.501) {
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
     else {
         gl_FragColor = sum / cum_w;

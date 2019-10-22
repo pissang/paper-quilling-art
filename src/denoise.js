@@ -1,35 +1,50 @@
 // Denoiser from https://www.shadertoy.com/view/ldKBzG
 import * as THREE from 'three';
 import {denoiseVert, denoiseFrag} from './denoise.frag';
+import {EffectComposer} from 'three/examples/jsm/postprocessing/EffectComposer';
+import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass';
+import {TexturePass} from 'three/examples/jsm/postprocessing/TexturePass';
 
 let renderer;
 
-const denoiseMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-        tNormal: {value: null},
-        tDepth: {value: null},
-        tInput: {value: null},
-        size: {value: new THREE.Vector2()}
-    },
-    vertexShader: denoiseVert,
-    fragmentShader: denoiseFrag
-});
-const fullQuadMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), denoiseMaterial);
-const fullQuadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+let composer;
 
 const inputTexture = new THREE.Texture();
 inputTexture.minFilter = THREE.LinearFilter;
 inputTexture.maxFilter = THREE.LinearFilter;
-denoiseMaterial.uniforms.tInput.value = inputTexture;
+
+const denoisePasses = [];
+
+function initComposer(scene, camera, normalTexture, depthTexture, width, height) {
+    composer = new EffectComposer(renderer);
+    composer.addPass(new TexturePass(inputTexture));
+    for (let i = 0; i < 2; i++) {
+        const pass = new ShaderPass({
+            uniforms: {
+                tNormal: {value: null},
+                tDepth: {value: null},
+                tDiffuse: {value: null},
+                strength: {value: 0.5},
+                projectionInv: {value: camera.projectionMatrixInverse},
+                size: {value: new THREE.Vector2(width, height)}
+            },
+            vertexShader: denoiseVert,
+            fragmentShader: denoiseFrag
+        });
+        denoisePasses.push(pass);
+        // It will clone another texture if passed the texture in the constructor
+        pass.uniforms.tNormal.value = normalTexture;
+        pass.uniforms.tDepth.value = depthTexture;
+        composer.addPass(pass);
+    }
+}
 
 export function initDenoiseScene(scene, camera, width, height) {
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(width, height);
     renderer.setPixelRatio(1);
 
-    denoiseMaterial.uniforms.size.value.set(width, height);
-
-    let depthTexture = denoiseMaterial.uniforms.tDepth.value = new THREE.DepthTexture({
+    let depthTexture = new THREE.DepthTexture({
         minFilter: THREE.NearestFilter,
         maxFilter: THREE.NearestFilter,
         type: THREE.UnsignedIntType
@@ -42,18 +57,19 @@ export function initDenoiseScene(scene, camera, width, height) {
         depthTexture,
         depthBuffer: true
     });
-    denoiseMaterial.uniforms.tNormal.value = normalRenderTarget.texture;
 
     scene.overrideMaterial = new THREE.MeshNormalMaterial();
     renderer.setRenderTarget(normalRenderTarget);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
 
+    initComposer(scene, camera, normalRenderTarget.texture, depthTexture, width, height);
     return renderer.domElement;
 }
 
 export function denoise(sourceImage) {
     inputTexture.image = sourceImage;
     inputTexture.needsUpdate = true;
-    renderer.render(fullQuadMesh, fullQuadCamera);
+
+    composer.render();
 }
