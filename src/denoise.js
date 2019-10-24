@@ -18,7 +18,7 @@ inputTexture.maxFilter = THREE.LinearFilter;
 
 const denoisePasses = [];
 
-function initComposer(scene, camera, normalTexture, depthTexture, width, height) {
+function initComposer(scene, camera, normalTexture, depthTexture, idTexture, width, height) {
     denoiseComposer = new EffectComposer(renderer);
     denoiseComposer.addPass(new TexturePass(inputTexture));
     for (let i = 0; i < 4; i++) {
@@ -27,7 +27,8 @@ function initComposer(scene, camera, normalTexture, depthTexture, width, height)
                 tNormal: {value: null},
                 tDepth: {value: null},
                 tDiffuse: {value: null},
-                strength: {value: 1},
+                tId: {value: null},
+                strength: {value: 0.5},
 
                 separator: {value: 0.5},
 
@@ -38,9 +39,12 @@ function initComposer(scene, camera, normalTexture, depthTexture, width, height)
             fragmentShader: denoiseFrag
         });
         denoisePasses.push(pass);
+
         // It will clone another texture if passed the texture in the constructor
         pass.uniforms.tNormal.value = normalTexture;
         pass.uniforms.tDepth.value = depthTexture;
+        pass.uniforms.tId.value = idTexture;
+
         denoiseComposer.addPass(pass);
     }
 }
@@ -60,7 +64,7 @@ function downsample(renderer, sourceTexture, downsamples) {
 
     for (let i = 0; i < downsamples; i++) {
         let rt = new THREE.WebGLRenderTarget(inTexture.image.width / 2, inTexture.image.height / 2, {
-            type: THREE.FloatType,
+            type: sourceTexture.type === THREE.UnsignedByteType ? THREE.UnsignedByteType : THREE.FloatType,
             minFilter: sourceTexture.minFilter,
             maxFilter: sourceTexture.maxFilter
         });
@@ -77,19 +81,71 @@ function downsample(renderer, sourceTexture, downsamples) {
     return inTexture;
 }
 
+function renderIdTexture(renderer, scene, camera, width, height) {
+    scene.traverse(mesh => {
+        if (mesh.idColorArray) {
+            if (mesh.geometry.attributes.color) {
+                let oldColorArray = mesh.geometry.attributes.color.value;
+                mesh.geometry.attributes.color.value = mesh.idColorArray;
+                mesh.geometry.needsUpdate = true;
+                mesh.oldColorArray = oldColorArray;
+            }
+            else {
+                mesh.geometry.addAttribute('color', new THREE.BufferAttribute(mesh.idColorArray, 3, false));
+            }
+
+            mesh.oldMaterial = mesh.material;
+            mesh.material = new THREE.MeshBasicMaterial({
+                vertexColors: THREE.VertexColors
+            });
+        }
+        else if (mesh.idColor) {
+            mesh.oldMaterial = mesh.material;
+            mesh.material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(mesh.idColor[0], mesh.idColor[1], mesh.idColor[2])
+            });
+        }
+    });
+
+    let rt = new THREE.WebGLRenderTarget(width, height);
+    renderer.setRenderTarget(rt);
+    scene.overrideMaterial = null;
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+
+    scene.traverse(mesh => {
+        if (mesh.oldMaterial) {
+            mesh.material = mesh.oldMaterial;
+            mesh.oldMaterial = null;
+        }
+
+        if (mesh.idColorArray) {
+            if (mesh.oldColorArray) {
+                mesh.geometry.attributes.color.value = mesh.oldColorArray;
+            }
+            else {
+                mesh.geometry.removeAttribute('color');
+            }
+            mesh.geometry.needsUpdate = true;
+        }
+    });
+
+    return rt.texture;
+}
+
 export function initDenoiseScene(scene, camera, width, height) {
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(width, height);
     renderer.setPixelRatio(1);
 
     let depthTexture = new THREE.DepthTexture({
-        minFilter: THREE.NearestFilter,
-        maxFilter: THREE.NearestFilter,
+        minFilter: THREE.LinearFilter,
+        maxFilter: THREE.LinearFilter,
         type: THREE.UnsignedIntType
     });
     let normalRenderTarget = new THREE.WebGLRenderTarget(width * 8, height * 8, {
-        minFilter: THREE.NearestFilter,
-        maxFilter: THREE.NearestFilter,
+        minFilter: THREE.LinearFilter,
+        maxFilter: THREE.LinearFilter,
         type: THREE.FloatType,
 
         depthTexture,
@@ -104,7 +160,9 @@ export function initDenoiseScene(scene, camera, width, height) {
     let depthTextureDownsampled = downsample(renderer, depthTexture, 3);
     let normalTextureDownsampled = downsample(renderer, normalRenderTarget.texture, 3);
 
-    initComposer(scene, camera, normalTextureDownsampled, depthTextureDownsampled, width, height);
+    let idTextureDownsampled = downsample(renderer, renderIdTexture(renderer, scene, camera, width * 8, height * 8), 3);
+
+    initComposer(scene, camera, normalTextureDownsampled, depthTextureDownsampled, idTextureDownsampled, width, height);
 
     return renderer.domElement;
 }

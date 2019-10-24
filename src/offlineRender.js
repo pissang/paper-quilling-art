@@ -6,7 +6,7 @@ import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader';
 import {initDenoiseScene, denoise} from './denoise';
 
 const RAY_TRACING = true;
-const TOTAL_SAMPLES = 200;
+const TOTAL_SAMPLES = 500;
 
 window.THREE = THREE;
 // THREE.EnvironmentLight = EnvironmentLight;
@@ -182,10 +182,23 @@ function packVertexColorToTexture(color) {
 
 }
 
+function intToRgb(int, rgb) {
+    var red = int >> 16;
+    var green = int - (red << 16) >> 8;
+    var blue = int - (red << 16) - (green << 8);
+    rgb[0] = red / 255;
+    rgb[1] = green / 255;
+    rgb[2] = blue / 255;
+    return rgb;
+}
+
 window.addEventListener('message', function (e) {
     if (!e.data.objects) {
         return;
     }
+
+    let objIdOffset = 0;
+
     e.data.objects.forEach(obj => {
         let bufferGeo = new THREE.BufferGeometry();
         bufferGeo.addAttribute('position', new THREE.BufferAttribute(obj.attributes.position, 3));
@@ -227,6 +240,30 @@ window.addEventListener('message', function (e) {
         }));
         mesh.matrix.fromArray(transform);
         mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
+
+        let idColorArrTmp = [];
+        if (obj.attributes.segments) {
+            let idColor = new Float32Array(obj.attributes.segments.length * 4);
+            let maxSegId = 0;
+            let off = 0;
+            for (let i = 0; i < obj.attributes.segments.length; i++) {
+                let segId = obj.attributes.segments[i];
+                maxSegId = Math.max(maxSegId, segId);
+                intToRgb(segId + objIdOffset, idColorArrTmp);
+
+                for (let k = 0; k < 3; k++) {
+                    idColor[off++] = idColorArrTmp[k];
+                }
+            }
+
+            objIdOffset += maxSegId;
+
+            mesh.idColorArray = idColor;
+        }
+        else {
+            mesh.idColor = intToRgb(objIdOffset++, []);
+        }
+
         scene.add(mesh);
     });
 

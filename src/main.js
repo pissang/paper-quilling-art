@@ -504,6 +504,7 @@ let app = application.create('#main', {
         updateScrollingPapers() {
             if (!this._paperMesh) {
                 this._paperMesh = new Mesh({
+                    name: 'paper',
                     material: new Material({shader})
                 });
                 this._paperMesh.material.define('VERTEX_COLOR');
@@ -711,6 +712,10 @@ let app = application.create('#main', {
             else {
                 setDetailNormalMap(null);
             }
+        },
+
+        getGeometryData() {
+            return this._geometryData;
         }
     }
 });
@@ -947,12 +952,25 @@ document.getElementById('render').addEventListener('click', () => {
 
                 let transform = obj.worldTransform.toArray();
 
+                let segments;
+                if (obj.name === 'paper') {
+                    segments = new Uint16Array(geo.vertexCount);
+                    let offset = 0;
+                    let geometryData = app.methods.getGeometryData();
+                    for (let i = 0; i < geometryData.length; i++) {
+                        for (let k = 0; k < geometryData[i].vertexCount; k++) {
+                            segments[offset++] = i;
+                        }
+                    }
+                }
+
                 objects.push({
                     attributes: {
                         position,
                         uv,
                         color,
-                        normal
+                        normal,
+                        segments
                     },
                     material: {
                         color: obj.material.get('color')
@@ -968,6 +986,9 @@ document.getElementById('render').addEventListener('click', () => {
                 );
                 if (color) {
                     transferables.push(color.buffer);
+                }
+                if (segments) {
+                    transferables.push(segments.buffer);
                 }
             }
         });

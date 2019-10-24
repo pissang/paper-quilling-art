@@ -12,6 +12,7 @@ export var denoiseFrag = `
 uniform sampler2D tDiffuse;
 uniform sampler2D tNormal;
 uniform sampler2D tDepth;
+uniform sampler2D tId;
 uniform float strength;
 
 uniform mat4 projectionInv;
@@ -97,6 +98,7 @@ void main() {
     float n_phi = 0.1;
     float p_phi = 0.1;
 	vec4 cval = texture2D(tDiffuse, vUv);
+    vec3 idVal = texture2D(tId, vUv).rgb;
 	vec3 nval = texture2D(tNormal, vUv).xyz * 2.0 - 1.0;
 	vec3 pval = fetchPos(vUv);
 
@@ -121,7 +123,10 @@ void main() {
         dist2 = max(dot(dir, nval) * 2.0, 0.0);
         float p_w = min(exp(-(dist2) / p_phi), 1.0);
 
-        float weight = c_w*n_w*p_w;
+        vec3 idTmp = texture2D(tId, uv).xyz;
+        float id_w = idTmp == idVal ? 1.0 : 0.0;
+
+        float weight = id_w * c_w * n_w * p_w;
         sum += texture2D(tDiffuse, vUv + offset[i] / size * strength) * weight * kernel[i];
         cum_w += weight * kernel[i];
     }
@@ -129,7 +134,7 @@ void main() {
 
     if (vUv.x < separator) {
         gl_FragColor = cval;
-        // gl_FragColor = vec4(nval, 1.0);
+        // gl_FragColor = vec4(idVal, 1.0);
     }
     else if (vUv.x < separator + 0.001) {
         gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
