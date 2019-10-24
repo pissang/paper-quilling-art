@@ -3,10 +3,24 @@ import {EnvironmentLight} from 'ray-tracing-renderer/src/EnvironmentLight';
 import {SoftDirectionalLight} from 'ray-tracing-renderer/src/SoftDirectionalLight';
 import * as THREE from 'three';
 import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader';
-import {initDenoiseScene, denoise} from './denoise';
+import {initDenoiser} from './denoise';
+import Tweakpane from 'tweakpane';
+import {EffectComposer} from 'three/examples/jsm/postprocessing/EffectComposer';
+import {TexturePass} from 'three/examples/jsm/postprocessing/TexturePass';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
+import {composerVert, vignetteFrag, sharpenFrag} from './composer.glsl';
 
 const RAY_TRACING = true;
 const TOTAL_SAMPLES = 500;
+
+const renderConfig = {
+    denoise: false,
+    denoiseStrength: 0.5,
+
+    separator: 0.5,
+
+    sharpness: 0
+};
 
 window.THREE = THREE;
 // THREE.EnvironmentLight = EnvironmentLight;
@@ -29,10 +43,14 @@ if (RAY_TRACING) {
         failIfMajorPerformanceCaveat: true
     });
 }
-const renderer = new (RAY_TRACING ? RayTracingRenderer : THREE.WebGLRenderer)({
+const offlineRenderer = new (RAY_TRACING ? RayTracingRenderer : THREE.WebGLRenderer)({
     canvas: offlineRenderCanvas
 });
-renderer.setSize(WIDTH, HEIGHT);
+offlineRenderer.setSize(WIDTH, HEIGHT);
+offlineRenderer.gammaOutput = true;
+offlineRenderer.gammaFactor = 2.2;
+offlineRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+offlineRenderer.toneMappingExposure = 1.5;
 
 const camera = new THREE.PerspectiveCamera();
 camera.aspect = WIDTH / HEIGHT;
@@ -41,11 +59,41 @@ camera.updateProjectionMatrix();
 
 let finished = false;
 
+let denoiserPasses = [];
+let sharpenPass;
+let vignettePass;
+
+function initComposer() {
+    sharpenPass = new ShaderPass({
+        uniforms: {
+            sharpness: {value: renderConfig.sharpness},
+            size: {value: new THREE.Vector2(WIDTH, HEIGHT)}
+        },
+        vertexShader: composerVert,
+        fragmentShader: sharpenFrag
+    });
+    vignettePass = new ShaderPass({
+        uniforms: {
+            darkness: {value: 1},
+            offset: {value: 1}
+        },
+        vertexShader: composerVert,
+        fragmentShader: vignetteFrag
+    });
+    composer.addPass(sharpenPass);
+    // composer.addPass(vignettePass);
+}
+
 function init() {
 
     if (RAY_TRACING) {
-        let canvas = initDenoiseScene(scene, camera, WIDTH, HEIGHT);
-        document.querySelector('#viewport').appendChild(canvas);
+        denoiserPasses = initDenoiser(composerRenderer, scene, camera, WIDTH, HEIGHT)
+        denoiserPasses.forEach(pass => {
+            pass.enabled = renderConfig.denoise;
+            composer.addPass(pass);
+        });
+        initComposer();
+
     }
 
     function render() {
@@ -53,7 +101,7 @@ function init() {
             return;
         }
         try {
-            renderer.render(scene, camera);
+            offlineRenderer.render(scene, camera);
         }
         catch(e) {
             console.log(e);
@@ -65,6 +113,17 @@ function init() {
     requestAnimationFrame(render);
 }
 
+const composerRenderer = new THREE.WebGLRenderer();
+composerRenderer.setSize(WIDTH, HEIGHT);
+composerRenderer.setPixelRatio(1);
+document.querySelector('#viewport').appendChild(composerRenderer.domElement);
+
+const inputTexture = new THREE.CanvasTexture(offlineRenderCanvas);
+inputTexture.minFilter = THREE.LinearFilter;
+inputTexture.maxFilter = THREE.LinearFilter;
+
+const composer = new EffectComposer(composerRenderer);
+composer.addPass(new TexturePass(inputTexture));
 
 const envMap = new RGBELoader().load('img/canyon.hdr', () => {
     window.postMessage({
@@ -102,19 +161,19 @@ else {
     scene.add(ambientLight);
 }
 
-renderer.gammaOutput = true;
-renderer.gammaFactor = 2.2;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.5;
+function stopRender() {
+    finished = true;
+    let progressDiv = document.querySelector('#progress');
+    let statusDiv = document.querySelector('#status');
+    progressDiv && (progressDiv.style.display = 'none');
+    statusDiv && (statusDiv.style.display = 'none');
+}
 
-let separator = 0.5;
-renderer.onSampleRendered = samples => {
+offlineRenderer.onSampleRendered = samples => {
     let progressDiv = document.querySelector('#progress');
     let statusDiv = document.querySelector('#status');
     if (samples > TOTAL_SAMPLES) {
-        finished = true;
-        progressDiv && (progressDiv.style.display = 'none');
-        statusDiv && (statusDiv.style.display = 'none');
+        stopRender();
     }
     let progress = Math.round(
         samples / TOTAL_SAMPLES * 70 + 30
@@ -122,14 +181,15 @@ renderer.onSampleRendered = samples => {
     progressDiv && (progressDiv.style.width = progress + '%');
     statusDiv && (statusDiv.innerHTML = 'RENDERING');
 
+    inputTexture.needsUpdate = true;
     // Do Denoise
-    denoise(offlineRenderCanvas, separator);
+    composer.render();
 };
 
 document.querySelector('#viewport').addEventListener('click', function (e) {
-    separator = e.offsetX / WIDTH;
+    renderConfig.separator = e.offsetX / WIDTH;
     if (finished) {
-        denoise(offlineRenderCanvas, separator);
+
     }
 });
 
@@ -281,3 +341,49 @@ window.addEventListener('message', function (e) {
 
     init();
 });
+
+function updateComposer() {
+    sharpenPass.uniforms.sharpness.value = renderConfig.sharpness;
+    composer.render();
+}
+
+const pane = new Tweakpane({
+    container: document.querySelector('#config'),
+    title: 'Render Config'
+});
+pane.addButton({
+    title: 'Stop Render'
+}).on('click', () => {
+    stopRender();
+});
+
+const denoiseFolder = pane.addFolder({
+    title: 'Denoise'
+});
+denoiseFolder.addInput(renderConfig, 'denoise', {
+    label: 'Enable'
+}).on('change', () => {
+    denoiserPasses.forEach(pass => {
+        pass.enabled = renderConfig.denoise;
+    });
+    composer.render();
+
+    console.log(composer.passes);
+});
+denoiseFolder.addInput(renderConfig, 'denoiseStrength', {
+    label: 'Strength',
+    min: 0,
+    max: 2
+}).on('change', () => {
+    denoiserPasses.forEach(pass => {
+        pass.uniforms.strength.value = renderConfig.denoiseStrength;
+    });
+    composer.render();
+});
+
+pane.addFolder({
+    title: 'Sharpen'
+}).addInput(renderConfig, 'sharpness', {
+    min: 0,
+    max: 0.5
+}).on('change', updateComposer);

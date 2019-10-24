@@ -2,25 +2,12 @@
 import * as THREE from 'three';
 import {denoiseVert, denoiseFrag} from './denoise.glsl';
 import {downsampleVert, downsampleFrag} from './downsample.glsl';
-import {EffectComposer} from 'three/examples/jsm/postprocessing/EffectComposer';
 import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass';
-import {TexturePass} from 'three/examples/jsm/postprocessing/TexturePass';
 // import {RenderPass} from 'three/examples/jsm/postprocessing/RenderPass';
 // import {SSAARenderPass} from 'three/examples/jsm/postprocessing/SSAARenderPass';
 
-let renderer;
-
-let denoiseComposer;
-
-const inputTexture = new THREE.Texture();
-inputTexture.minFilter = THREE.NearestFilter;
-inputTexture.maxFilter = THREE.LinearFilter;
-
-const denoisePasses = [];
-
-function initComposer(scene, camera, normalTexture, depthTexture, idTexture, width, height) {
-    denoiseComposer = new EffectComposer(renderer);
-    denoiseComposer.addPass(new TexturePass(inputTexture));
+function createDenoisePasses(scene, camera, normalTexture, depthTexture, idTexture, width, height) {
+    const denoisePasses = [];
     for (let i = 0; i < 4; i++) {
         const pass = new ShaderPass({
             uniforms: {
@@ -30,7 +17,7 @@ function initComposer(scene, camera, normalTexture, depthTexture, idTexture, wid
                 tId: {value: null},
                 strength: {value: 0.5},
 
-                separator: {value: 0.5},
+                separator: {value: 0},
 
                 projectionInv: {value: camera.projectionMatrixInverse},
                 size: {value: new THREE.Vector2(width, height)}
@@ -44,9 +31,8 @@ function initComposer(scene, camera, normalTexture, depthTexture, idTexture, wid
         pass.uniforms.tNormal.value = normalTexture;
         pass.uniforms.tDepth.value = depthTexture;
         pass.uniforms.tId.value = idTexture;
-
-        denoiseComposer.addPass(pass);
     }
+    return denoisePasses;
 }
 
 function downsample(renderer, sourceTexture, downsamples) {
@@ -133,10 +119,7 @@ function renderIdTexture(renderer, scene, camera, width, height) {
     return rt.texture;
 }
 
-export function initDenoiseScene(scene, camera, width, height) {
-    renderer = new THREE.WebGLRenderer();
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(1);
+export function initDenoiser(renderer, scene, camera, width, height) {
 
     let depthTexture = new THREE.DepthTexture({
         minFilter: THREE.LinearFilter,
@@ -162,18 +145,5 @@ export function initDenoiseScene(scene, camera, width, height) {
 
     let idTextureDownsampled = downsample(renderer, renderIdTexture(renderer, scene, camera, width * 8, height * 8), 3);
 
-    initComposer(scene, camera, normalTextureDownsampled, depthTextureDownsampled, idTextureDownsampled, width, height);
-
-    return renderer.domElement;
-}
-
-export function denoise(sourceImage, separator) {
-    inputTexture.image = sourceImage;
-    inputTexture.needsUpdate = true;
-
-    denoisePasses.forEach(pass => {
-        pass.uniforms.separator.value = separator;
-    });
-
-    denoiseComposer.render();
+    return createDenoisePasses(scene, camera, normalTextureDownsampled, depthTextureDownsampled, idTextureDownsampled, width, height);
 }

@@ -111,10 +111,19 @@ void main() {
         float dist2 = dot(t, t);
         float c_w = min(exp(-(dist2) / c_phi), 1.0);
 
-        vec3 ntmp = texture2D(tNormal, uv).xyz * 2.0 - 1.0;
-        // vec3 t2 = nval - ntmp;
-        dist2 = max(1.0 - dot(nval, ntmp), 0.0);
-        float n_w = min(exp(-(dist2) / n_phi), 1.0);
+        float n_w = 1.0;
+        float id_w = 1.0;
+
+        for (int k = 1; k < 5; k++) {
+            vec2 uv2 = vUv + offset[i] / size * (strength * float(k) / 4.0);
+            vec3 ntmp = texture2D(tNormal, uv2).xyz * 2.0 - 1.0;
+            // vec3 t2 = nval - ntmp;
+            dist2 = max(1.0 - dot(nval, ntmp), 0.0);
+            n_w *= min(exp(-(dist2) / n_phi), 1.0);
+
+            vec3 idTmp = texture2D(tId, uv2).xyz;
+            id_w *= idTmp == idVal ? 1.0 : 0.2;
+        }
 
         vec3 ptmp = fetchPos(vUv);
         // vec3 t2 = pval - ptmp;
@@ -123,8 +132,6 @@ void main() {
         dist2 = max(dot(dir, nval) * 2.0, 0.0);
         float p_w = min(exp(-(dist2) / p_phi), 1.0);
 
-        vec3 idTmp = texture2D(tId, uv).xyz;
-        float id_w = idTmp == idVal ? 1.0 : 0.0;
 
         float weight = id_w * c_w * n_w * p_w;
         sum += texture2D(tDiffuse, vUv + offset[i] / size * strength) * weight * kernel[i];
@@ -132,11 +139,11 @@ void main() {
     }
 
 
-    if (vUv.x < separator) {
+    if (vUv.x < separator - 0.001) {
         gl_FragColor = cval;
         // gl_FragColor = vec4(idVal, 1.0);
     }
-    else if (vUv.x < separator + 0.001) {
+    else if (vUv.x < separator) {
         gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
     else {
