@@ -94,53 +94,44 @@ void main() {
 
     vec4 sum = vec4(0.0);
     float c_phi = 1.0;
-    float n_phi = 2.0;
-    float p_phi = 0.5;
+    float n_phi = 0.1;
+    float p_phi = 0.1;
 	vec4 cval = texture2D(tDiffuse, vUv);
-	vec3 nval = texture2D(tNormal, vUv).xyz;
+	vec3 nval = texture2D(tNormal, vUv).xyz * 2.0 - 1.0;
 	vec3 pval = fetchPos(vUv);
 
     float cum_w = 0.0;
     for(int i = 0; i < 25; i++)
     {
         vec2 uv = vUv + offset[i] / size * strength;
-
         vec4 ctmp = texture2D(tDiffuse, uv);
         vec4 t = cval - ctmp;
-        float dist2 = dot(t,t);
+        float dist2 = dot(t, t);
         float c_w = min(exp(-(dist2) / c_phi), 1.0);
 
-        vec3 ntmp = texture2D(tNormal, uv).xyz;
-        vec3 t2 = nval - ntmp;
-        dist2 = max(dot(t2, t2), 0.0);
+        vec3 ntmp = texture2D(tNormal, uv).xyz * 2.0 - 1.0;
+        // vec3 t2 = nval - ntmp;
+        dist2 = max(1.0 - dot(nval, ntmp), 0.0);
         float n_w = min(exp(-(dist2) / n_phi), 1.0);
 
         vec3 ptmp = fetchPos(vUv);
-        t2 = pval - ptmp;
-        dist2 = dot(t2, t2);
+        // vec3 t2 = pval - ptmp;
+        // dist2 = dot(t2, t2);
+        vec3 dir = normalize(pval - ptmp);
+        dist2 = max(dot(dir, nval) * 2.0, 0.0);
         float p_w = min(exp(-(dist2) / p_phi), 1.0);
 
-        //float weight = c_w*n_w*p_w;
-        float weight = c_w * n_w * p_w;
-        sum += ctmp * weight * kernel[i];
+        float weight = c_w*n_w*p_w;
+        sum += texture2D(tDiffuse, vUv + offset[i] / size * strength) * weight * kernel[i];
         cum_w += weight * kernel[i];
     }
 
-    // if (vUv.x < 0.3) {
-    //     gl_FragColor = nval;
-    // }
-    // else if (vUv.x > 0.7) {
-    //     gl_FragColor = cval;
-    // }
-    // else {
-    //     gl_FragColor = sum / cum_w;
-    // }
 
-
-    if (vUv.x < 0.5) {
+    if (vUv.x < separator) {
         gl_FragColor = cval;
+        // gl_FragColor = vec4(nval, 1.0);
     }
-    else if (vUv.x < 0.501) {
+    else if (vUv.x < separator + 0.001) {
         gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
     else {

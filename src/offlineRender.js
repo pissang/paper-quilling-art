@@ -107,6 +107,7 @@ renderer.gammaFactor = 2.2;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.5;
 
+let separator = 0.5;
 renderer.onSampleRendered = samples => {
     let progressDiv = document.querySelector('#progress');
     let statusDiv = document.querySelector('#status');
@@ -122,8 +123,15 @@ renderer.onSampleRendered = samples => {
     statusDiv && (statusDiv.innerHTML = 'RENDERING');
 
     // Do Denoise
-    denoise(offlineRenderCanvas);
+    denoise(offlineRenderCanvas, separator);
 };
+
+document.querySelector('#viewport').addEventListener('click', function (e) {
+    separator = e.offsetX / WIDTH;
+    if (finished) {
+        denoise(offlineRenderCanvas, separator);
+    }
+});
 
 
 function packVertexColorToTexture(color) {

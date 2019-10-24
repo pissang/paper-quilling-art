@@ -1,5 +1,7 @@
 
 // Extend detail map for standard shader.
+export default `
+
 @export papercut.standard_ext
 
 #define USE_METALNESS
@@ -615,3 +617,4 @@ void main() {
 }
 
 @end
+`;
