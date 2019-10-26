@@ -8,7 +8,7 @@ import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass';
 
 function createDenoisePasses(scene, camera, normalTexture, depthTexture, idTexture, width, height) {
     const denoisePasses = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
         const pass = new ShaderPass({
             uniforms: {
                 tNormal: {value: null},
@@ -126,7 +126,7 @@ export function initDenoiser(renderer, scene, camera, width, height) {
         maxFilter: THREE.LinearFilter,
         type: THREE.UnsignedIntType
     });
-    let normalRenderTarget = new THREE.WebGLRenderTarget(width * 8, height * 8, {
+    let normalRenderTarget = new THREE.WebGLRenderTarget(width * 4, height * 4, {
         minFilter: THREE.LinearFilter,
         maxFilter: THREE.LinearFilter,
         type: THREE.FloatType,
@@ -140,10 +140,10 @@ export function initDenoiser(renderer, scene, camera, width, height) {
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
 
-    let depthTextureDownsampled = downsample(renderer, depthTexture, 3);
-    let normalTextureDownsampled = downsample(renderer, normalRenderTarget.texture, 3);
+    let depthTextureDownsampled = downsample(renderer, depthTexture, 2);
+    let normalTextureDownsampled = downsample(renderer, normalRenderTarget.texture, 2);
 
-    let idTextureDownsampled = downsample(renderer, renderIdTexture(renderer, scene, camera, width * 8, height * 8), 3);
+    let idTextureDownsampled = downsample(renderer, renderIdTexture(renderer, scene, camera, width * 4, height * 4), 2);
 
     return createDenoisePasses(scene, camera, normalTextureDownsampled, depthTextureDownsampled, idTextureDownsampled, width, height);
 }

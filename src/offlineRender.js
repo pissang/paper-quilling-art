@@ -17,6 +17,8 @@ const renderConfig = {
     denoise: false,
     denoiseStrength: 0.5,
 
+    showSeparate: false,
+
     separator: 0.5,
 
     sharpness: 0
@@ -67,7 +69,8 @@ function initComposer() {
     sharpenPass = new ShaderPass({
         uniforms: {
             sharpness: {value: renderConfig.sharpness},
-            size: {value: new THREE.Vector2(WIDTH, HEIGHT)}
+            size: {value: new THREE.Vector2(WIDTH, HEIGHT)},
+            tDiffuse: {value: null}
         },
         vertexShader: composerVert,
         fragmentShader: sharpenFrag
@@ -75,7 +78,8 @@ function initComposer() {
     vignettePass = new ShaderPass({
         uniforms: {
             darkness: {value: 1},
-            offset: {value: 1}
+            offset: {value: 1},
+            tDiffuse: {value: null}
         },
         vertexShader: composerVert,
         fragmentShader: vignetteFrag
@@ -187,9 +191,14 @@ offlineRenderer.onSampleRendered = samples => {
 };
 
 document.querySelector('#viewport').addEventListener('click', function (e) {
-    renderConfig.separator = e.offsetX / WIDTH;
+    if (renderConfig.showSeparate) {
+        renderConfig.separator = e.offsetX / WIDTH;
+        denoiserPasses.forEach(pass => {
+            pass.uniforms.separator.value = renderConfig.separator;
+        });
+    }
     if (finished) {
-
+        composer.render();
     }
 });
 
@@ -367,16 +376,23 @@ denoiseFolder.addInput(renderConfig, 'denoise', {
         pass.enabled = renderConfig.denoise;
     });
     composer.render();
-
-    console.log(composer.passes);
 });
 denoiseFolder.addInput(renderConfig, 'denoiseStrength', {
     label: 'Strength',
     min: 0,
-    max: 2
+    max: 1
 }).on('change', () => {
     denoiserPasses.forEach(pass => {
         pass.uniforms.strength.value = renderConfig.denoiseStrength;
+    });
+    composer.render();
+});
+denoiseFolder.addInput(renderConfig, 'showSeparate', {
+    label: 'Separate'
+}).on('change', () => {
+    denoiserPasses.forEach(pass => {
+        pass.uniforms.separator.value = renderConfig.showSeparate
+            ? renderConfig.separator : 0;
     });
     composer.render();
 });
@@ -385,5 +401,5 @@ pane.addFolder({
     title: 'Sharpen'
 }).addInput(renderConfig, 'sharpness', {
     min: 0,
-    max: 0.5
+    max: 0.2
 }).on('change', updateComposer);
