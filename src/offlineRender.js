@@ -3,7 +3,7 @@ import {EnvironmentLight} from 'ray-tracing-renderer/src/EnvironmentLight';
 import {SoftDirectionalLight} from 'ray-tracing-renderer/src/SoftDirectionalLight';
 import * as THREE from 'three';
 import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader';
-import {initDenoiser} from './denoise';
+// import {initDenoiser} from './denoise';
 import Tweakpane from 'tweakpane';
 import {EffectComposer} from 'three/examples/jsm/postprocessing/EffectComposer';
 import {TexturePass} from 'three/examples/jsm/postprocessing/TexturePass';
@@ -91,12 +91,12 @@ function initComposer() {
 function init() {
 
     if (RAY_TRACING) {
-        denoiserPasses = initDenoiser(composerRenderer, scene, camera, WIDTH, HEIGHT)
-        denoiserPasses.forEach(pass => {
-            pass.enabled = renderConfig.denoise;
-            composer.addPass(pass);
-        });
-        initComposer();
+        // denoiserPasses = initDenoiser(composerRenderer, scene, camera, WIDTH, HEIGHT)
+        // denoiserPasses.forEach(pass => {
+        //     pass.enabled = renderConfig.denoise;
+        //     composer.addPass(pass);
+        // });
+        // initComposer();
 
     }
 
@@ -120,7 +120,7 @@ function init() {
 const composerRenderer = new THREE.WebGLRenderer();
 composerRenderer.setSize(WIDTH, HEIGHT);
 composerRenderer.setPixelRatio(1);
-document.querySelector('#viewport').appendChild(composerRenderer.domElement);
+document.querySelector('#viewport').appendChild(offlineRenderCanvas);
 
 const inputTexture = new THREE.CanvasTexture(offlineRenderCanvas);
 inputTexture.minFilter = THREE.LinearFilter;
@@ -186,21 +186,21 @@ offlineRenderer.onSampleRendered = samples => {
     statusDiv && (statusDiv.innerHTML = 'RENDERING');
 
     inputTexture.needsUpdate = true;
-    // Do Denoise
-    composer.render();
+    // Do denoise
+    // composer.render();
 };
 
-document.querySelector('#viewport').addEventListener('click', function (e) {
-    if (renderConfig.showSeparate) {
-        renderConfig.separator = e.offsetX / WIDTH;
-        denoiserPasses.forEach(pass => {
-            pass.uniforms.separator.value = renderConfig.separator;
-        });
-    }
-    if (finished) {
-        composer.render();
-    }
-});
+// document.querySelector('#viewport').addEventListener('click', function (e) {
+//     if (renderConfig.showSeparate) {
+//         renderConfig.separator = e.offsetX / WIDTH;
+//         denoiserPasses.forEach(pass => {
+//             pass.uniforms.separator.value = renderConfig.separator;
+//         });
+//     }
+//     if (finished) {
+//         composer.render();
+//     }
+// });
 
 
 function packVertexColorToTexture(color) {
@@ -366,40 +366,40 @@ pane.addButton({
     stopRender();
 });
 
-const denoiseFolder = pane.addFolder({
-    title: 'Denoise'
-});
-denoiseFolder.addInput(renderConfig, 'denoise', {
-    label: 'Enable'
-}).on('change', () => {
-    denoiserPasses.forEach(pass => {
-        pass.enabled = renderConfig.denoise;
-    });
-    composer.render();
-});
-denoiseFolder.addInput(renderConfig, 'denoiseStrength', {
-    label: 'Strength',
-    min: 0,
-    max: 1
-}).on('change', () => {
-    denoiserPasses.forEach(pass => {
-        pass.uniforms.strength.value = renderConfig.denoiseStrength;
-    });
-    composer.render();
-});
-denoiseFolder.addInput(renderConfig, 'showSeparate', {
-    label: 'Separate'
-}).on('change', () => {
-    denoiserPasses.forEach(pass => {
-        pass.uniforms.separator.value = renderConfig.showSeparate
-            ? renderConfig.separator : 0;
-    });
-    composer.render();
-});
+// const denoiseFolder = pane.addFolder({
+//     title: 'Denoise'
+// });
+// denoiseFolder.addInput(renderConfig, 'denoise', {
+//     label: 'Enable'
+// }).on('change', () => {
+//     denoiserPasses.forEach(pass => {
+//         pass.enabled = renderConfig.denoise;
+//     });
+//     composer.render();
+// });
+// denoiseFolder.addInput(renderConfig, 'denoiseStrength', {
+//     label: 'Strength',
+//     min: 0,
+//     max: 1
+// }).on('change', () => {
+//     denoiserPasses.forEach(pass => {
+//         pass.uniforms.strength.value = renderConfig.denoiseStrength;
+//     });
+//     composer.render();
+// });
+// denoiseFolder.addInput(renderConfig, 'showSeparate', {
+//     label: 'Separate'
+// }).on('change', () => {
+//     denoiserPasses.forEach(pass => {
+//         pass.uniforms.separator.value = renderConfig.showSeparate
+//             ? renderConfig.separator : 0;
+//     });
+//     composer.render();
+// });
 
-pane.addFolder({
-    title: 'Sharpen'
-}).addInput(renderConfig, 'sharpness', {
-    min: 0,
-    max: 0.2
-}).on('change', updateComposer);
+// pane.addFolder({
+//     title: 'Sharpen'
+// }).addInput(renderConfig, 'sharpness', {
+//     min: 0,
+//     max: 0.2
+// }).on('change', updateComposer);
