@@ -947,6 +947,10 @@ document.getElementById('render').addEventListener('click', () => {
                 && obj.name !== 'plane'    // Exclude ground.
             ) {
                 let geo = obj.geometry;
+                if (geo.vertexCount === 0) {
+                    return;
+                }
+
                 let position = geo.attributes.position.value.slice();
                 let uv = geo.attributes.texcoord0.value.slice();
                 let normal = geo.attributes.normal.value.slice();
