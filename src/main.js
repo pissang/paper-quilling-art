@@ -158,6 +158,9 @@ let config;
 
 try {
     config = JSON.parse(localStorage.getItem('main-config'));
+    if (window.location.search === '?reset') {
+        throw new Error('Force reset parameters');
+    }
     if (!config) {
         throw new Error('Unkown config');
     }
