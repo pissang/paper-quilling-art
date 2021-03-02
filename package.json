@@ -29,7 +29,7 @@
     "ray-tracing-renderer": "git+https://github.com/hoverinc/ray-tracing-renderer.git",
     "seedrandom": "^3.0.5",
     "simplex-noise": "^2.4.0",
-    "three": "^0.108.0",
+    "three": "^0.125.0",
     "tweakpane": "^1.1.0",
     "zrender": "^4.0.3"
   },
