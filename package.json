@@ -1,40 +1,45 @@
 {
-  "name": "paper-scrolling-art",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "paper-quilling-art",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Generate paper quilling art and path trace it in the browser with MuTracer.",
+  "type": "module",
   "scripts": {
-    "dev": "node node_modules/webpack/bin/webpack.js -w --mode development",
-    "build": "node node_modules/webpack/bin/webpack.js -p"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/pissang/paper-scrolling-art.git"
+    "url": "https://github.com/pissang/paper-quilling-art.git"
   },
-  "author": "",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/pissang/paper-scrolling-art/issues"
-  },
-  "homepage": "https://github.com/pissang/paper-scrolling-art#readme",
   "dependencies": {
-    "claygl": "git+https://github.com/pissang/claygl.git",
-    "claygl-advanced-renderer": "git+https://github.com/pissang/claygl-advanced-renderer.git",
-    "d3-scale-chromatic": "^1.2.0",
+    "@mantine/core": "^9.7.2",
+    "@mantine/dropzone": "^9.7.2",
+    "@mantine/hooks": "^9.7.2",
+    "@meimu/mutracer": "^0.1.1",
+    "@tabler/icons-react": "^3.49.0",
+    "d3-scale-chromatic": "^3.1.0",
     "density-clustering": "^1.3.0",
-    "geometry-extrude": "^0.1.2",
-    "lodash.clonedeep": "^4.5.0",
-    "lodash.debounce": "^4.0.8",
-    "lodash.merge": "^4.6.2",
-    "ray-tracing-renderer": "git+https://github.com/hoverinc/ray-tracing-renderer.git",
+    "geometry-extrude": "^0.1.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "seedrandom": "^3.0.5",
-    "simplex-noise": "^2.4.0",
-    "three": "^0.125.0",
-    "tweakpane": "^1.1.0",
-    "zrender": "^4.0.3"
+    "three": "^0.186.1",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "text-loader": "0.0.1",
-    "webpack": "^4.40.2"
+    "@types/d3-scale-chromatic": "^3.1.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/seedrandom": "^3.0.8",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "postcss": "^8.5.6",
+    "postcss-preset-mantine": "^1.18.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4"
   }
 }

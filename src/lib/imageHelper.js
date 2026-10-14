@@ -66,6 +66,3 @@ export function createMaskImageData(image, cutoff, inverse) {
     return data;
 };
 
-export function extractOutline() {
-
-}

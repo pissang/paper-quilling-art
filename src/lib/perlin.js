@@ -1,4 +1,4 @@
-import {perlin2, seed} from '../dep/noise2';
+import {perlin2, seed} from './noise2';
 import seedrandom from 'seedrandom';
 
 let ALPHA_THRESHOLD = 240;
@@ -22,7 +22,7 @@ function getIdx(px, py, imageWidth, imageHeight) {
 }
 
 function lineGenerator(x, y, min, max, trail, noiseScale, maskImage) {
-    let jitter = Math.random() / 20;
+    let jitter = random() / 20;
     let points = [];
     let pixels = maskImage && maskImage.data;
     let imageWidth = maskImage && maskImage.width;
