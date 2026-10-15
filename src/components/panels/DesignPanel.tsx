@@ -96,6 +96,10 @@ export function DesignPanel() {
         <SliderField name="noiseScale" label="Swirl" min={0.5} max={10} step={0.1}
           hint="Scale of the Perlin flow field. Larger values give bigger swirls." />
         <SliderField name="thickness" label="Thickness" min={0.005} max={0.08} step={0.001} />
+        <SliderField name="imperfection" label="Handmade" min={0} max={1} step={0.05}
+          hint="How irregular the strips are: slight lean and uneven height, like hand glued paper." />
+        <SliderField name="curl" label="End curls" min={0} max={1} step={0.05}
+          hint="Chance that a strip end is rolled into a small scroll." />
         <SliderField name="minHeight" label="Min height" min={0.05} max={3} step={0.05} />
         <SliderField name="maxHeight" label="Max height" min={0.05} max={3} step={0.05} />
         <SwitchField name="paperVisible" label="Show strips" />

@@ -4,10 +4,9 @@ import { Engine, Render, RenderLoop, THREESync, type DenoiserOptions } from '@me
 import { MAX_COLORS, type Config, type RGB } from '../config';
 import { useConfig, useRenderInfo, type RenderPhase } from '../store';
 import {
-  BOX_SIZE, assignColors, createMask, generateStrips, groupHeights, mergeStrips, setExtrudeHeight,
-  type Mask, type Strip
+  BOX_SIZE, assignColors, buildOutline, createMask, generateStrips, groupHeights, mergeStrips, setStripHeight,
+  type MergedGeometry, type Mask, type Strip
 } from './generate';
-import { extrudePolyline } from 'geometry-extrude';
 
 /** Beyond the orbit controls' max distance so the camera never passes a light. */
 const LIGHT_DISTANCE = 150;
@@ -21,10 +20,10 @@ const GROUND_UV_SCALE = 0.35;
 
 type Keys = (keyof Config)[];
 const MASK_KEYS: Keys = ['maskText', 'maskTextFont', 'maskTextSize', 'maskImage'];
-const STRIP_KEYS: Keys = ['seed', 'number', 'trail', 'noiseScale', 'thickness'];
+const STRIP_KEYS: Keys = ['seed', 'number', 'trail', 'noiseScale', 'thickness', 'imperfection', 'curl'];
 const GROUP_KEYS: Keys = ['colorNumber', 'clusterColors'];
 const HEIGHT_KEYS: Keys = ['minHeight', 'maxHeight'];
-const OUTLINE_GEOMETRY_KEYS: Keys = ['outlineThickness', 'outlineHeight'];
+const OUTLINE_GEOMETRY_KEYS: Keys = ['outlineThickness', 'outlineHeight', 'imperfection'];
 const MATERIAL_KEYS: Keys = ['paperRoughness', 'paperTexture', 'bumpScale', 'translucency', 'bevel', 'colors', 'outlineColor'];
 const VISIBILITY_KEYS: Keys = ['paperVisible', 'outlineVisible'];
 const GROUND_KEYS: Keys = ['showPlane', 'planeColor', 'shadowColor', 'shadowIntensity', 'backgroundColor'];
@@ -83,6 +82,8 @@ export class PaperRenderer {
   private mask: Mask | null = null;
   private strips: Strip[] = [];
   private colorIndices: Uint8Array = new Uint8Array(0);
+  /** Merged strips per paper mesh, kept so heights can change in place. */
+  private layers: (MergedGeometry | null)[] = [];
   private generation = 0;
   private generateTimer = 0;
   private unsubscribers: (() => void)[] = [];
@@ -344,14 +345,18 @@ export class PaperRenderer {
     const heights = groupHeights(colorCount, config.minHeight, config.maxHeight);
 
     let triangleCount = 0;
+    this.layers = [];
     this.paperMeshes.forEach((mesh, idx) => {
       mesh.geometry.dispose();
       if (idx >= colorCount) {
         mesh.geometry = new THREE.BufferGeometry();
+        this.layers.push(null);
         return;
       }
       const strips = this.strips.filter((_, i) => this.colorIndices[i] === idx);
-      const { position, normal, indices } = mergeStrips(strips, heights[idx]);
+      const merged = mergeStrips(strips, heights[idx]);
+      this.layers.push(merged);
+      const { position, normal, indices } = merged;
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
       geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
@@ -368,8 +373,9 @@ export class PaperRenderer {
     const heights = groupHeights(this.paperMeshes.length, config.minHeight, config.maxHeight);
     this.paperMeshes.forEach((mesh, idx) => {
       const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
-      if (attr) {
-        setExtrudeHeight(attr.array as Float32Array, heights[idx]);
+      const layer = this.layers[idx];
+      if (attr && layer) {
+        setStripHeight(layer, heights[idx]);
         attr.needsUpdate = true;
       }
     });
@@ -380,12 +386,9 @@ export class PaperRenderer {
     this.outlineMesh.geometry.dispose();
     this.outlineMesh.geometry = new THREE.BufferGeometry();
     if (this.mask && config.outlineThickness > 0 && config.outlineHeight > 0) {
-      const { position, normal, indices } = extrudePolyline(this.mask.outline, {
-        lineWidth: config.outlineThickness,
-        depth: config.outlineHeight,
-        smoothSide: true,
-        excludeBottom: true
-      });
+      const { position, normal, indices } = buildOutline(
+        this.mask, config.outlineThickness, config.outlineHeight, config.imperfection, 0
+      );
       const geometry = this.outlineMesh.geometry;
       geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
       geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));

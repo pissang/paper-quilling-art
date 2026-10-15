@@ -18,6 +18,10 @@ export interface Config {
   trail: number;
   noiseScale: number;
   thickness: number;
+  /** Hand made irregularity of the strips: lean and uneven height, in [0, 1]. */
+  imperfection: number;
+  /** Probability that a strip end rolls into a scroll. */
+  curl: number;
   minHeight: number;
   maxHeight: number;
   paperVisible: boolean;
@@ -102,6 +106,8 @@ export function createDefaultConfig(): Config {
     trail: 100,
     noiseScale: 3,
     thickness: 0.01,
+    imperfection: 0.5,
+    curl: 0,
     minHeight: 0.6,
     maxHeight: 1.2,
     paperVisible: true,
