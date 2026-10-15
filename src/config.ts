@@ -1,8 +1,69 @@
-import * as chromatic from 'd3-scale-chromatic';
-
 export type RGB = [number, number, number];
 
-export const MAX_COLORS = 7;
+export const MAX_COLORS = 16;
+
+export interface Style {
+  name: string;
+  description: string;
+  settings: Partial<Config>;
+}
+
+/**
+ * Looks from different quilling traditions. Their methods pull against each
+ * other (swirls take the room pieces would fill, line fills replace pieces),
+ * so each is a set of settings rather than all at once.
+ */
+export const STYLES: Style[] = [
+  {
+    name: 'Pieces',
+    description: 'Coils, teardrops and leaves packed edge to edge.',
+    settings: {
+      lineFill: 1, contourLines: 0, silhouette: 0, baseCard: false, swirls: 0,
+      flowers: 0.15, coilTurns: 6, heightVariation: 0.6
+    }
+  },
+  {
+    name: 'Swirls',
+    description: 'Big open swirls of several shaded strips, small coils in between.',
+    settings: {
+      lineFill: 1, contourLines: 0, silhouette: 0, baseCard: false, swirls: 0.65,
+      swirlStrips: 4, swirlSize: 2.4, flowers: 0, coilTurns: 5, heightVariation: 0.8
+    }
+  },
+  {
+    name: 'Card',
+    description: 'Shapes cut from card, edged with a strip and filled with pieces.',
+    settings: {
+      lineFill: 1, contourLines: 1, silhouette: 1.3, baseCard: true, cardTone: -0.12,
+      swirls: 0.25, swirlStrips: 2, swirlSize: 1.6, flowers: 0.3, coilTurns: 6, heightVariation: 0.35
+    }
+  },
+  {
+    name: 'Contours',
+    description: 'Large areas filled with flowing parallel strips, like a quilled portrait.',
+    settings: {
+      lineFill: 0.12, contourLines: 2, silhouette: 1.2, baseCard: false, swirls: 0,
+      flowers: 0.15, coilTurns: 6, heightVariation: 0.5
+    }
+  }
+];
+
+export interface Sample {
+  name: string;
+  url: string;
+  /** Settings that suit the picture, applied when it is picked. */
+  settings: Partial<Config>;
+}
+
+/** Bundled cut-paper pictures to start from. */
+export const SAMPLES: Sample[] = [
+  { name: 'Cat', url: './img/samples/cat.svg', settings: { ...STYLES[0].settings, colorNumber: 8 } },
+  // The face reads best as flowing contour lines, like a quilled portrait.
+  { name: 'Portrait', url: './img/samples/portrait.svg', settings: { ...STYLES[3].settings, colorNumber: 10 } },
+  { name: 'Hummingbird', url: './img/samples/hummingbird.svg', settings: { ...STYLES[1].settings, colorNumber: 10 } },
+  { name: 'Koi', url: './img/samples/koi.svg', settings: { ...STYLES[0].settings, colorNumber: 8 } },
+  { name: 'Butterfly', url: './img/samples/butterfly.svg', settings: { ...STYLES[2].settings, colorNumber: 8 } }
+];
 
 export const PAPER_TEXTURES = {
   'paper-detail': './img/paper-detail.png',
@@ -13,34 +74,64 @@ export const PAPER_TEXTURES = {
 export interface Config {
   seed: number;
 
-  // Paper strips
-  number: number;
-  trail: number;
-  noiseScale: number;
+  // Picture
+  /** Image URL; uploads are object URLs that do not survive a reload. */
+  image: string;
+  /** Paper colors taken from the image. */
+  colorNumber: number;
+  /** Long side of the analysed image in pixels; more keeps finer detail. */
+  detail: number;
+  /** Leave a plain background around the subject as bare board. */
+  removeBackground: boolean;
+  /** Saturation of the paper relative to the image colors. */
+  colorBoost: number;
+  /** Strips along each region edge, including the outline. */
+  contourLines: number;
+  contourSpacing: number;
+  /** Regions larger than this share of the subject are filled with contour strips only. */
+  lineFill: number;
+  /** Width of the band of cream scrolls around the subject; 0 for none. */
+  ornaments: number;
+  ornamentColor: RGB;
+  /** Height of the cream strip around the subject relative to the strips; 0 for none. */
+  silhouette: number;
+  /** Lay each region on coloured card cut to its shape. */
+  baseCard: boolean;
+  /** Card shade relative to the paper: negative darker, positive lighter. */
+  cardTone: number;
+  /** Share of each region given to multi-strip swirls, 0 to 1. */
+  swirls: number;
+  /** Strips rolled together in a swirl. */
+  swirlStrips: number;
+  /** Largest swirl radius relative to the largest piece. */
+  swirlSize: number;
+
+  // Quilled elements
+  /** Half length of the largest elements. */
+  elementSize: number;
+  /** Half length of the smallest filler coils. */
+  minElementSize: number;
+  /** Gap between neighbouring elements. */
+  gap: number;
+  /** Share of the largest spots that become flowers. */
+  flowers: number;
+  /** Turns of a loose coil. */
+  coilTurns: number;
+  /** How far a coil's eye drifts off centre, 0 to 1. */
+  coilEccentricity: number;
+  /** How strongly pinching drags a teardrop's turns towards its tip. */
+  tipPull: number;
+  /** Paper thickness. */
   thickness: number;
+  /** Strip width, i.e. how tall the paper stands. */
+  stripHeight: number;
+  /** Height difference between regions and pieces, as a fraction of the strip width. */
+  heightVariation: number;
+  /** Share of that difference that varies piece by piece rather than by region. */
+  heightJitter: number;
   /** Hand made irregularity of the strips: lean and uneven height, in [0, 1]. */
   imperfection: number;
-  /** Probability that a strip end rolls into a scroll. */
-  curl: number;
-  minHeight: number;
-  maxHeight: number;
   paperVisible: boolean;
-
-  // Colors
-  clusterColors: boolean;
-  colorNumber: number;
-  colors: RGB[];
-
-  // Mask
-  maskText: string;
-  maskTextFont: string;
-  maskTextSize: number;
-  /** Object URL of an uploaded mask image. Not persisted. */
-  maskImage: string;
-  outlineVisible: boolean;
-  outlineColor: RGB;
-  outlineThickness: number;
-  outlineHeight: number;
 
   // Material
   paperRoughness: number;
@@ -53,6 +144,10 @@ export interface Config {
   backgroundColor: RGB;
   showPlane: boolean;
   planeColor: RGB;
+  /** Clear coat on the board, which reflects the light and the paper. */
+  planeGloss: number;
+  /** Roughness of that coat; lower is a sharper reflection. */
+  planeRoughness: number;
   shadowColor: RGB;
   shadowIntensity: number;
 
@@ -81,6 +176,8 @@ export interface Config {
   bloom: number;
 
   // Path tracing
+  /** Viewport resolution relative to the screen; snapshots and exports are always full. */
+  renderScale: number;
   maxSamples: number;
   bounces: number;
   denoise: boolean;
@@ -88,112 +185,81 @@ export interface Config {
   liveDenoise: boolean;
 }
 
-const INITIAL_COLORS: RGB[] = [
-  [4, 38, 77],
-  [37, 106, 168],
-  [11, 51, 77],
-  [97, 202, 255],
-  [0, 162, 255],
-  [255, 217, 0],
-  [255, 244, 137]
-];
-
 export function createDefaultConfig(): Config {
   return {
     seed: Math.random(),
 
-    number: 800,
-    trail: 100,
-    noiseScale: 3,
+    image: SAMPLES[0].url,
+    colorNumber: 8,
+    detail: 320,
+    removeBackground: true,
+    colorBoost: 1.3,
+    contourLines: 0,
+    contourSpacing: 0.07,
+    lineFill: 1,
+    ornaments: 2.5,
+    ornamentColor: [246, 238, 222],
+    silhouette: 0,
+    baseCard: false,
+    cardTone: -0.12,
+    swirls: 0,
+    swirlStrips: 4,
+    swirlSize: 2.2,
+
+    elementSize: 0.9,
+    minElementSize: 0.12,
+    gap: 0.008,
+    flowers: 0.15,
+    coilTurns: 6,
+    coilEccentricity: 0.7,
+    tipPull: 1.5,
     thickness: 0.01,
+    stripHeight: 0.38,
+    heightVariation: 0.6,
+    heightJitter: 0.6,
     imperfection: 0.5,
-    curl: 0,
-    minHeight: 0.6,
-    maxHeight: 1.2,
     paperVisible: true,
 
-    clusterColors: true,
-    colorNumber: 6,
-    colors: INITIAL_COLORS.map(c => [...c] as RGB),
+    paperRoughness: 0.6,
+    paperTexture: '',
+    bumpScale: 0,
+    translucency: 0.45,
+    bevel: 0.003,
 
-    maskText: '',
-    maskTextFont: 'sans-serif',
-    maskTextSize: 100,
-    maskImage: '',
-    outlineVisible: true,
-    outlineColor: [0, 63, 97],
-    outlineThickness: 0.04,
-    outlineHeight: 1.2,
-
-    paperRoughness: 0.75,
-    paperTexture: PAPER_TEXTURES['paper-detail'],
-    bumpScale: 0.6,
-    translucency: 0.15,
-    bevel: 0.004,
-
-    backgroundColor: [48, 48, 48],
+    backgroundColor: [255, 255, 255],
     showPlane: true,
-    planeColor: [0, 63, 97],
+    planeColor: [255, 255, 255],
+    planeGloss: 1,
+    planeRoughness: 0.12,
     shadowColor: [0, 0, 0],
     shadowIntensity: 0.8,
 
     lightDirection: [-0.3, 0.4],
-    lightIntensity: 2.6,
-    lightSoftness: 8,
+    lightIntensity: 3.4,
+    lightSoftness: 20,
     lightColor: [255, 241, 222],
-    fillIntensity: 0.45,
-    skyIntensity: 0.6,
+    fillIntensity: 0.4,
+    skyIntensity: 0.7,
 
     spinAngle: 0,
     fov: 40,
 
-    exposure: 1.2,
+    exposure: 1.1,
     toneMapping: 'aces',
     contrast: 1,
     saturation: 1.05,
     vignette: 0.15,
     bloom: 0,
 
-    maxSamples: 512,
-    bounces: 5,
+    renderScale: 0.5,
+    maxSamples: 16,
+    bounces: 4,
     denoise: true,
-    liveDenoise: true
+    liveDenoise: false
   };
 }
 
-export interface Palette {
-  name: string;
-  sample: (t: number) => string;
-}
-
-export const PALETTES: Palette[] = [
-  ['Spectral', chromatic.interpolateSpectral],
-  ['RdYlBu', chromatic.interpolateRdYlBu],
-  ['RdYlGn', chromatic.interpolateRdYlGn],
-  ['BrBG', chromatic.interpolateBrBG],
-  ['PuOr', chromatic.interpolatePuOr],
-  ['RdBu', chromatic.interpolateRdBu],
-  ['Viridis', chromatic.interpolateViridis],
-  ['Magma', chromatic.interpolateMagma],
-  ['Plasma', chromatic.interpolatePlasma],
-  ['Inferno', chromatic.interpolateInferno],
-  ['Warm', chromatic.interpolateWarm],
-  ['Cool', chromatic.interpolateCool],
-  ['Rainbow', chromatic.interpolateRainbow],
-  ['Sinebow', chromatic.interpolateSinebow],
-  ['PuRd', chromatic.interpolatePuRd],
-  ['YlGnBu', chromatic.interpolateYlGnBu]
-].map(([name, sample]) => ({ name: name as string, sample: sample as (t: number) => string }));
-
-export function paletteColors(palette: Palette, count = MAX_COLORS): RGB[] {
-  const colors: RGB[] = [];
-  for (let i = 0; i < count; i++) {
-    colors.push(parseColor(palette.sample(1 - i / (count + 1))));
-  }
-  return colors;
-}
-
-/** Parses the `rgb(...)` / `#rrggbb` strings returned by d3 interpolators. */
+/** Parses `rgb(...)` and `#rrggbb` strings. */
 export function parseColor(str: string): RGB {
   const rgb = str.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (rgb) {

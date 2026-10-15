@@ -1,18 +1,18 @@
 import { useState, type ComponentType } from 'react';
 import { ActionIcon, Group, ScrollArea, Tooltip, UnstyledButton } from '@mantine/core';
 import {
-  IconAdjustmentsHorizontal, IconArrowBackUp, IconArrowForwardUp, IconBrush, IconCube, IconLetterCase, IconRefresh
+  IconAdjustmentsHorizontal, IconArrowBackUp, IconArrowForwardUp, IconBrush, IconCube, IconPhoto, IconRefresh
 } from '@tabler/icons-react';
 import { useConfig } from '../store';
 import { DesignPanel } from './panels/DesignPanel';
-import { MaskPanel } from './panels/MaskPanel';
+import { ImagePanel } from './panels/ImagePanel';
 import { ScenePanel } from './panels/ScenePanel';
 import { RenderPanel } from './panels/RenderPanel';
 import { RenderFooter } from './RenderFooter';
 
 const TABS: { value: string; label: string; icon: ComponentType<{ size?: number; stroke?: number }>; panel: ComponentType }[] = [
-  { value: 'design', label: 'Design', icon: IconBrush, panel: DesignPanel },
-  { value: 'shape', label: 'Shape', icon: IconLetterCase, panel: MaskPanel },
+  { value: 'image', label: 'Image', icon: IconPhoto, panel: ImagePanel },
+  { value: 'quilling', label: 'Quilling', icon: IconBrush, panel: DesignPanel },
   { value: 'scene', label: 'Scene', icon: IconCube, panel: ScenePanel },
   { value: 'render', label: 'Render', icon: IconAdjustmentsHorizontal, panel: RenderPanel }
 ];
@@ -54,7 +54,7 @@ function Logo() {
 }
 
 export function Sidebar() {
-  const [tab, setTab] = useState('design');
+  const [tab, setTab] = useState('image');
   const Panel = TABS.find(t => t.value === tab)!.panel;
   return (
     <aside className="sidebar">

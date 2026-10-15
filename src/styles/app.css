@@ -593,3 +593,28 @@ body {
   .sidebar { width: auto; flex: 1; min-height: 0; border-left: 0; border-top: 1px solid var(--hairline); }
   .overlay-bottom-left { display: none; }
 }
+
+.sample-option {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  transition: outline-color 120ms ease;
+}
+
+.sample-option img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sample-option:hover {
+  outline-color: var(--mantine-color-dark-3);
+}
+
+.sample-option[data-active] {
+  outline-color: var(--mantine-color-clay-5);
+}

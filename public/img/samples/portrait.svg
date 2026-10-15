@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 600" width="600" height="600">
+  <!-- A woman in profile with flowers in her hair, drawn in flat paper colors. -->
+  <defs>
+    <ellipse id="petal" cx="0" cy="-46" rx="22" ry="42" />
+    <ellipse id="petal-mid" cx="0" cy="-34" rx="16" ry="30" />
+    <ellipse id="petal-small" cx="0" cy="-22" rx="11" ry="20" />
+    <path id="leaf" d="M0 0 C 30 -24 84 -24 116 0 C 84 24 30 24 0 0 Z" />
+    <g id="flower-big">
+      <use xlink:href="#petal" transform="rotate(0)" />
+      <use xlink:href="#petal" transform="rotate(45)" />
+      <use xlink:href="#petal" transform="rotate(90)" />
+      <use xlink:href="#petal" transform="rotate(135)" />
+      <use xlink:href="#petal" transform="rotate(180)" />
+      <use xlink:href="#petal" transform="rotate(225)" />
+      <use xlink:href="#petal" transform="rotate(270)" />
+      <use xlink:href="#petal" transform="rotate(315)" />
+    </g>
+    <g id="flower-mid">
+      <use xlink:href="#petal-mid" transform="rotate(0)" />
+      <use xlink:href="#petal-mid" transform="rotate(60)" />
+      <use xlink:href="#petal-mid" transform="rotate(120)" />
+      <use xlink:href="#petal-mid" transform="rotate(180)" />
+      <use xlink:href="#petal-mid" transform="rotate(240)" />
+      <use xlink:href="#petal-mid" transform="rotate(300)" />
+    </g>
+    <g id="flower-small">
+      <use xlink:href="#petal-small" transform="rotate(0)" />
+      <use xlink:href="#petal-small" transform="rotate(72)" />
+      <use xlink:href="#petal-small" transform="rotate(144)" />
+      <use xlink:href="#petal-small" transform="rotate(216)" />
+      <use xlink:href="#petal-small" transform="rotate(288)" />
+    </g>
+  </defs>
+  <rect width="600" height="600" fill="#f4eee3" />
+  <g transform="translate(-75 0)">
+
+    <!-- Face and neck -->
+    <path fill="#efc6a2" d="
+      M 300 132
+      C 262 138 238 170 238 204
+      C 238 228 232 244 226 256
+      C 219 269 204 281 199 293
+      C 196 300 204 305 216 305
+      C 220 310 216 316 219 320
+      C 211 325 212 331 221 334
+      C 216 340 219 346 226 348
+      C 228 357 226 367 235 377
+      C 246 390 268 394 284 397
+      L 290 446
+      C 292 486 284 526 276 572
+      L 430 572
+      C 404 500 382 442 372 380
+      C 364 300 350 168 300 132 Z" />
+    <!-- Shadow along the jaw and neck -->
+    <path fill="#d9a07f" d="M 284 397 C 306 402 328 398 348 386 C 350 410 354 432 360 454 C 336 444 310 436 290 446 Z" />
+    <!-- Cheek -->
+    <ellipse cx="266" cy="296" rx="24" ry="17" fill="#e7a98a" />
+    <!-- Lips -->
+    <path fill="#c4505c" d="M 219 320 C 226 316 234 318 240 323 C 236 327 228 330 221 334 C 214 330 212 325 219 320 Z" />
+    <path fill="#c4505c" d="M 221 334 C 228 332 236 333 240 337 C 236 344 230 347 226 348 C 220 345 218 339 221 334 Z" />
+    <!-- Closed eye and brow -->
+    <path d="M 246 240 C 254 249 266 250 276 242" fill="none" stroke="#3b2a28" stroke-width="5" stroke-linecap="round" />
+    <path d="M 242 220 C 254 211 270 211 284 218" fill="none" stroke="#6a4433" stroke-width="5" stroke-linecap="round" />
+
+    <!-- Hair -->
+    <path fill="#5b3a2c" d="
+      M 292 124
+      C 360 92 456 108 506 176
+      C 562 252 566 372 526 456
+      C 494 524 444 564 404 588
+      L 344 588
+      C 378 524 392 452 382 380
+      C 374 300 356 210 316 160
+      C 306 150 296 140 292 124 Z" />
+    <!-- Fringe over the forehead -->
+    <path fill="#5b3a2c" d="M 292 124 C 268 132 248 152 244 178 C 262 160 290 150 318 152 C 312 140 304 130 292 124 Z" />
+    <!-- Lighter strands -->
+    <path fill="#8a5a3c" d="M 330 150 C 380 150 420 190 432 250 C 400 210 370 190 340 186 Z" />
+    <path fill="#8a5a3c" d="M 400 400 C 430 440 436 500 414 560 C 404 510 396 460 380 430 Z" />
+
+    <!-- Leaves -->
+    <use xlink:href="#leaf" fill="#6f9a3f" transform="translate(360 150) rotate(-40)" />
+    <use xlink:href="#leaf" fill="#3f6b4e" transform="translate(500 210) rotate(10) scale(0.9)" />
+    <use xlink:href="#leaf" fill="#6f9a3f" transform="translate(470 420) rotate(60) scale(0.8)" />
+    <use xlink:href="#leaf" fill="#3f6b4e" transform="translate(410 300) rotate(-160) scale(0.7)" />
+    <use xlink:href="#leaf" fill="#6f9a3f" transform="translate(520 330) rotate(-20) scale(0.7)" />
+
+    <!-- Flowers -->
+    <use xlink:href="#flower-big" fill="#e9862b" transform="translate(430 205) rotate(10)" />
+    <circle cx="430" cy="205" r="20" fill="#f2b33d" />
+    <use xlink:href="#flower-big" fill="#d6537a" transform="translate(470 350) rotate(25) scale(0.9)" />
+    <circle cx="470" cy="350" r="18" fill="#f4e2c6" />
+    <use xlink:href="#flower-mid" fill="#f2b33d" transform="translate(370 270)" />
+    <circle cx="370" cy="270" r="12" fill="#c4505c" />
+    <use xlink:href="#flower-mid" fill="#8a4a7a" transform="translate(520 260) rotate(20)" />
+    <circle cx="520" cy="260" r="12" fill="#f2b33d" />
+    <use xlink:href="#flower-mid" fill="#34497a" transform="translate(440 470) rotate(10)" />
+    <circle cx="440" cy="470" r="12" fill="#f4e2c6" />
+    <use xlink:href="#flower-small" fill="#d6537a" transform="translate(350 130)" />
+    <circle cx="350" cy="130" r="8" fill="#f2b33d" />
+    <use xlink:href="#flower-small" fill="#e9862b" transform="translate(500 520) rotate(30)" />
+    <circle cx="500" cy="520" r="8" fill="#34497a" />
+    <use xlink:href="#flower-small" fill="#f2b33d" transform="translate(390 520)" />
+    <circle cx="390" cy="520" r="8" fill="#c4505c" />
+  </g>
+</svg>

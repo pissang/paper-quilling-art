@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 600" width="600" height="600">
+  <!-- Two koi circling among lotus pads in pale water. -->
+  <defs>
+    <g id="koi">
+      <path d="M 0 115 C 30 150 54 170 44 206 C 22 186 10 170 0 152 C -10 170 -22 186 -44 206 C -54 170 -30 150 0 115 Z" />
+      <path d="M 0 -122 C 62 -100 72 0 32 80 C 22 100 10 116 0 126 C -10 116 -22 100 -32 80 C -72 0 -62 -100 0 -122 Z" />
+      <path d="M 36 -20 C 70 -10 84 20 78 40 C 60 24 46 10 34 6 Z" />
+      <path d="M -36 -20 C -70 -10 -84 20 -78 40 C -60 24 -46 10 -34 6 Z" />
+    </g>
+    <path id="pad" d="M 0 0 L 70 -20 A 74 74 0 1 1 52 -54 Z" />
+  </defs>
+  <rect width="600" height="600" fill="#d8ecef" />
+  <!-- Lotus pads -->
+  <use xlink:href="#pad" fill="#5fa05a" transform="translate(140 150) rotate(20)" />
+  <use xlink:href="#pad" fill="#3f7d4a" transform="translate(470 460) rotate(200) scale(0.9)" />
+  <use xlink:href="#pad" fill="#7cb35a" transform="translate(470 140) rotate(120) scale(0.6)" />
+  <use xlink:href="#pad" fill="#7cb35a" transform="translate(130 470) rotate(300) scale(0.55)" />
+  <!-- Lotus flower -->
+  <g transform="translate(300 300)">
+    <ellipse cx="0" cy="-30" rx="18" ry="34" fill="#f29bb4" />
+    <ellipse cx="0" cy="-30" rx="18" ry="34" fill="#f29bb4" transform="rotate(60)" />
+    <ellipse cx="0" cy="-30" rx="18" ry="34" fill="#f29bb4" transform="rotate(120)" />
+    <ellipse cx="0" cy="-30" rx="18" ry="34" fill="#f29bb4" transform="rotate(180)" />
+    <ellipse cx="0" cy="-30" rx="18" ry="34" fill="#f29bb4" transform="rotate(240)" />
+    <ellipse cx="0" cy="-30" rx="18" ry="34" fill="#f29bb4" transform="rotate(300)" />
+    <circle r="16" fill="#f7d36b" />
+  </g>
+  <!-- Orange koi -->
+  <g transform="translate(200 330) rotate(-35)">
+    <use xlink:href="#koi" fill="#f08a3c" />
+    <ellipse cx="0" cy="-60" rx="22" ry="30" fill="#fbf6ec" />
+    <ellipse cx="6" cy="20" rx="18" ry="26" fill="#fbf6ec" />
+    <circle cx="-14" cy="-92" r="5" fill="#2a2a2a" />
+    <circle cx="14" cy="-92" r="5" fill="#2a2a2a" />
+  </g>
+  <!-- White and red koi -->
+  <g transform="translate(400 270) rotate(145)">
+    <use xlink:href="#koi" fill="#fbf6ec" />
+    <ellipse cx="-6" cy="-50" rx="24" ry="34" fill="#d6453d" />
+    <ellipse cx="8" cy="36" rx="16" ry="22" fill="#d6453d" />
+    <circle cx="-14" cy="-92" r="5" fill="#2a2a2a" />
+    <circle cx="14" cy="-92" r="5" fill="#2a2a2a" />
+  </g>
+</svg>

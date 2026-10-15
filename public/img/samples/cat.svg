@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 600" width="600" height="600">
+  <!-- A sitting cat in mint, patterned with pastel flowers. -->
+  <defs>
+    <ellipse id="petal" cx="0" cy="-38" rx="15" ry="34" />
+    <ellipse id="petal-small" cx="0" cy="-22" rx="10" ry="20" />
+  </defs>
+  <rect width="600" height="600" fill="#f5f0e6" />
+  <g transform="translate(-20 0)">
+    <!-- Tail -->
+    <path fill="#8fcfb6" d="M 236 540 C 160 556 104 512 110 444 C 114 396 150 366 186 376
+      C 160 392 146 424 152 456 C 160 500 196 516 240 508 Z" />
+    <!-- Body -->
+    <path fill="#9fd9c4" d="
+      M 352 128 L 360 66 L 398 104 L 434 68 L 444 130
+      C 468 156 468 206 444 230
+      C 428 246 414 254 408 266
+      C 444 304 474 384 472 452
+      C 470 502 454 538 434 552
+      L 300 556
+      C 228 556 188 522 184 470
+      C 180 410 228 332 300 292
+      C 330 274 346 254 346 228
+      C 330 206 326 164 352 128 Z" />
+    <!-- Ears -->
+    <path fill="#f6b3a3" d="M 362 92 L 366 124 L 386 110 Z" />
+    <path fill="#f6b3a3" d="M 428 94 L 432 128 L 414 112 Z" />
+    <!-- Face -->
+    <path d="M 404 176 C 412 184 422 184 430 176" fill="none" stroke="#2f4a44" stroke-width="5" stroke-linecap="round" />
+    <circle cx="452" cy="196" r="6" fill="#f08f86" />
+    <!-- Big peach flower on the body -->
+    <g transform="translate(332 440)" fill="#f7a582">
+      <use xlink:href="#petal" transform="rotate(0)" />
+      <use xlink:href="#petal" transform="rotate(36)" />
+      <use xlink:href="#petal" transform="rotate(72)" />
+      <use xlink:href="#petal" transform="rotate(108)" />
+      <use xlink:href="#petal" transform="rotate(144)" />
+      <use xlink:href="#petal" transform="rotate(180)" />
+      <use xlink:href="#petal" transform="rotate(216)" />
+      <use xlink:href="#petal" transform="rotate(252)" />
+      <use xlink:href="#petal" transform="rotate(288)" />
+      <use xlink:href="#petal" transform="rotate(324)" />
+    </g>
+    <circle cx="332" cy="440" r="16" fill="#f26f5e" />
+    <!-- Yellow flower on the chest -->
+    <g transform="translate(424 330)" fill="#f7e08a">
+      <use xlink:href="#petal-small" transform="rotate(0)" />
+      <use xlink:href="#petal-small" transform="rotate(45)" />
+      <use xlink:href="#petal-small" transform="rotate(90)" />
+      <use xlink:href="#petal-small" transform="rotate(135)" />
+      <use xlink:href="#petal-small" transform="rotate(180)" />
+      <use xlink:href="#petal-small" transform="rotate(225)" />
+      <use xlink:href="#petal-small" transform="rotate(270)" />
+      <use xlink:href="#petal-small" transform="rotate(315)" />
+    </g>
+    <circle cx="424" cy="330" r="9" fill="#f7a582" />
+    <!-- Small flowers and leaves -->
+    <g transform="translate(244 470)" fill="#f7e08a">
+      <use xlink:href="#petal-small" transform="rotate(0)" />
+      <use xlink:href="#petal-small" transform="rotate(72)" />
+      <use xlink:href="#petal-small" transform="rotate(144)" />
+      <use xlink:href="#petal-small" transform="rotate(216)" />
+      <use xlink:href="#petal-small" transform="rotate(288)" />
+    </g>
+    <circle cx="244" cy="470" r="7" fill="#c3e38f" />
+    <ellipse cx="372" cy="250" rx="14" ry="30" transform="rotate(-30 372 250)" fill="#c3e38f" />
+    <ellipse cx="300" cy="340" rx="16" ry="36" transform="rotate(50 300 340)" fill="#c3e38f" />
+    <ellipse cx="440" cy="480" rx="14" ry="30" transform="rotate(20 440 480)" fill="#c3e38f" />
+    <circle cx="410" cy="410" r="18" fill="#7cc3b0" />
+    <circle cx="270" cy="400" r="16" fill="#7cc3b0" />
+    <circle cx="136" cy="438" r="14" fill="#f7e08a" />
+  </g>
+</svg>

@@ -7,8 +7,8 @@
  * regular: their height wavers, they lean a few degrees and lean differently
  * along their length, the way hand-placed paper does. The ends are cut square.
  *
- * Height is applied late (see `applyHeight`) so layer heights can change
- * without rebuilding the strips.
+ * Height is applied late (see `applyHeight`) so heights can change without
+ * rebuilding the strips.
  */
 
 export type Point2 = [number, number];
@@ -37,15 +37,19 @@ export interface StripOptions {
   rand: () => number;
   /** Treat the polyline as a loop (no end caps). */
   closed?: boolean;
+  /** Smoothing radius for traced, pixel-stepped input. */
+  smooth?: number;
+  /** Height of this strip relative to the others, e.g. for strips cut wider. */
+  heightScale?: number;
 }
 
 /** How far strips sit into the board, so no light leaks under the glued edge. */
 const SINK = 0.004;
 /** Top corner radius relative to the half thickness. */
 const CORNER = 0.6;
-/** Resampling limits along the centre line. */
-const MAX_STEP = 0.06;
-const MAX_TURN = (5 * Math.PI) / 180;
+/** Simplification limits along the centre line. */
+const TOLERANCE = 0.003;
+const MAX_STEP = 0.25;
 /** Miter scale limit at sharp turns. */
 const MITER_LIMIT = 2;
 
@@ -77,102 +81,129 @@ function dedupe(points: Point2[], eps: number) {
   return out;
 }
 
-/** Chaikin corner cutting. Paper cannot hold a kink, it bends with some radius. */
-function chaikin(points: Point2[], closed: boolean, iterations: number) {
-  let pts = points;
-  for (let iter = 0; iter < iterations; iter++) {
-    const n = pts.length;
-    const out: Point2[] = closed ? [] : [pts[0]];
-    const segs = closed ? n : n - 1;
-    for (let i = 0; i < segs; i++) {
-      const a = pts[i];
-      const b = pts[(i + 1) % n];
-      out.push(
-        [a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25],
-        [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]
-      );
+/** Points every `step` along the line, keeping both ends of an open line. */
+function resample(points: Point2[], closed: boolean, step: number): Point2[] {
+  const pts = closed ? [...points, points[0]] : points;
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) {
+    total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  }
+  const count = Math.max(closed ? 3 : 2, Math.round(total / step));
+  const spacing = total / count;
+  const out: Point2[] = [pts[0]];
+  let seg = 1;
+  let segStart = 0;
+  let segLen = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
+  for (let k = 1; k < count; k++) {
+    const target = k * spacing;
+    while (segStart + segLen < target && seg < pts.length - 1) {
+      segStart += segLen;
+      seg++;
+      segLen = Math.hypot(pts[seg][0] - pts[seg - 1][0], pts[seg][1] - pts[seg - 1][1]);
     }
-    if (!closed) {
-      out.push(pts[n - 1]);
+    const t = segLen > 0 ? (target - segStart) / segLen : 0;
+    const a = pts[seg - 1];
+    const b = pts[seg];
+    out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  }
+  if (!closed) {
+    out.push(pts[pts.length - 1]);
+  }
+  return out;
+}
+
+/**
+ * Evens out a traced line: uniform resampling, then three box filter passes
+ * (close to a Gaussian) over `radius`. Paper bends in smooth curves, so pixel
+ * steps in traced contours must not show.
+ */
+export function smoothLine(points: Point2[], closed: boolean, radius: number) {
+  const step = Math.min(radius / 3, 0.02);
+  let pts = resample(points, closed, step);
+  const n = pts.length;
+  const k = Math.max(1, Math.round(radius / step / 2));
+  for (let pass = 0; pass < 3; pass++) {
+    const out: Point2[] = new Array(n);
+    for (let i = 0; i < n; i++) {
+      if (!closed && (i < 1 || i > n - 2)) {
+        out[i] = pts[i];
+        continue;
+      }
+      let x = 0;
+      let y = 0;
+      let m = 0;
+      for (let j = -k; j <= k; j++) {
+        let q = i + j;
+        if (closed) {
+          q = (q + n) % n;
+        }
+        else if (q < 0 || q >= n) {
+          continue;
+        }
+        x += pts[q][0];
+        y += pts[q][1];
+        m++;
+      }
+      out[i] = [x / m, y / m];
     }
     pts = out;
   }
   return pts;
 }
 
-/** Keeps a point when the strip has run MAX_STEP or turned MAX_TURN since the last kept one. */
-function decimate(points: Point2[]) {
-  const out: Point2[] = [points[0]];
-  let run = 0;
-  let turn = 0;
-  for (let i = 1; i < points.length - 1; i++) {
-    const p = points[i - 1];
-    const c = points[i];
-    const q = points[i + 1];
-    run += Math.hypot(c[0] - p[0], c[1] - p[1]);
-    const a0 = Math.atan2(c[1] - p[1], c[0] - p[0]);
-    const a1 = Math.atan2(q[1] - c[1], q[0] - c[0]);
-    let da = a1 - a0;
-    da = Math.atan2(Math.sin(da), Math.cos(da));
-    turn += Math.abs(da);
-    if (run >= MAX_STEP || turn >= MAX_TURN) {
-      out.push(c);
-      run = turn = 0;
+/** Squared distance from p to segment ab. */
+function segDist2(p: Point2, a: Point2, b: Point2) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const ex = a[0] + dx * t - p[0];
+  const ey = a[1] + dy * t - p[1];
+  return ex * ex + ey * ey;
+}
+
+/**
+ * Douglas-Peucker simplification with a segment length cap. Shading uses
+ * averaged tangents, so a coarse centre line still reads as a smooth bend.
+ */
+export function simplify(points: Point2[], tolerance = TOLERANCE, maxStep = MAX_STEP): Point2[] {
+  const n = points.length;
+  if (n < 3) {
+    return points.slice();
+  }
+  const keep = new Uint8Array(n);
+  keep[0] = keep[n - 1] = 1;
+  const tol2 = tolerance * tolerance;
+  const maxStep2 = maxStep * maxStep;
+  const stack: [number, number][] = [[0, n - 1]];
+  while (stack.length) {
+    const [i0, i1] = stack.pop()!;
+    if (i1 - i0 < 2) {
+      continue;
+    }
+    let worst = -1;
+    let worstD = tol2;
+    for (let i = i0 + 1; i < i1; i++) {
+      const d = segDist2(points[i], points[i0], points[i1]);
+      if (d > worstD) {
+        worstD = d;
+        worst = i;
+      }
+    }
+    if (worst < 0) {
+      const dx = points[i1][0] - points[i0][0];
+      const dy = points[i1][1] - points[i0][1];
+      if (dx * dx + dy * dy > maxStep2) {
+        worst = (i0 + i1) >> 1;
+      }
+    }
+    if (worst >= 0) {
+      keep[worst] = 1;
+      stack.push([i0, worst], [worst, i1]);
     }
   }
-  out.push(points[points.length - 1]);
-  return out;
-}
-
-/** Signed turning of the last few segments, used to pick the curl direction. */
-function endTurn(points: Point2[]) {
-  const n = points.length;
-  const k = Math.min(6, n - 1);
-  const a = points[n - 1 - k];
-  const b = points[n - 1 - Math.floor(k / 2)];
-  const c = points[n - 1];
-  return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
-}
-
-/** Appends a tightening scroll, the classic quilled end. */
-function appendCurl(points: Point2[], rand: () => number) {
-  const n = points.length;
-  const last = points[n - 1];
-  const prev = points[Math.max(n - 3, 0)];
-  let heading = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
-  const turn = endTurn(points);
-  const side = Math.abs(turn) > 1e-6 ? Math.sign(turn) : rand() < 0.5 ? -1 : 1;
-  const r0 = 0.08 + rand() * 0.07;
-  const total = Math.PI * (1.4 + rand() * 0.9);
-  const ds = 0.008;
-  let [x, y] = last;
-  let turned = 0;
-  while (turned < total) {
-    const r = r0 * (1 - 0.7 * turned / total);
-    const dθ = ds / r;
-    heading += side * dθ;
-    turned += dθ;
-    x += Math.cos(heading) * ds;
-    y += Math.sin(heading) * ds;
-    points.push([x, y]);
-  }
-}
-
-/** Adds scrolls to the ends of an open polyline, each end with probability `amount`. */
-export function curlEnds(points: Point2[], amount: number, rand: () => number): Point2[] {
-  // Draw both numbers every time so the rest of the sequence stays stable.
-  const curlEnd = rand() < amount;
-  const curlStart = rand() < amount;
-  let pts = points.slice();
-  if (curlEnd && pts.length > 2) {
-    appendCurl(pts, rand);
-  }
-  if (curlStart && pts.length > 2) {
-    pts.reverse();
-    appendCurl(pts, rand);
-    pts.reverse();
-  }
-  return pts;
+  return points.filter((_, i) => keep[i]);
 }
 
 // Hand made variation ---------------------------------------------------------
@@ -213,7 +244,17 @@ export function buildStrip(polyline: Point2[], opts: StripOptions): StripMesh | 
   if (pts.length < 3) {
     closed = false;
   }
-  pts = decimate(chaikin(pts, closed, 2));
+  if (opts.smooth) {
+    pts = smoothLine(pts, closed, opts.smooth);
+  }
+  if (closed) {
+    // Simplify as an open line that returns to its start.
+    pts = simplify([...pts, pts[0]]);
+    pts.pop();
+  }
+  else {
+    pts = simplify(pts);
+  }
   const n = pts.length;
   if (n < 2) {
     return null;
@@ -259,11 +300,11 @@ export function buildStrip(polyline: Point2[], opts: StripOptions): StripMesh | 
 
   // Per strip and along the strip variation.
   const imp = imperfection;
-  const heightScale = 1 + imp * 0.05 * (rand() * 2 - 1);
-  const heightWobble = wobble(rand, [1.6, 0.55]);
-  const edgeWobble = wobble(rand, [0.12, 0.07]);
+  const heightScale = (opts.heightScale ?? 1) * (1 + imp * 0.05 * (rand() * 2 - 1));
+  const heightWobble = wobble(rand, [2.4, 1.2]);
   const baseLean = imp * 0.06 * (rand() * 2 - 1);
-  const leanWobble = wobble(rand, [2.2, 0.9]);
+  // Long waves only: short ones read as a crumpled strip rather than hand work.
+  const leanWobble = wobble(rand, [3, 1.6]);
 
   const half = thickness / 2;
   const capVerts = closed ? 0 : RING * 2;
@@ -284,7 +325,7 @@ export function buildStrip(polyline: Point2[], opts: StripOptions): StripMesh | 
     lean[v * 2] = nx[i] * tilt;
     lean[v * 2 + 1] = ny[i] * tilt;
     if (h > 0) {
-      hf[v] = heightScale * (1 + imp * (0.03 * heightWobble(s) + 0.006 * edgeWobble(s)));
+      hf[v] = heightScale * (1 + imp * 0.03 * heightWobble(s));
       dz[v] = z * half;
     }
     else {

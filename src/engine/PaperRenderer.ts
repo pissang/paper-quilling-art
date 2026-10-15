@@ -3,10 +3,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Engine, Render, RenderLoop, THREESync, type DenoiserOptions } from '@meimu/mutracer';
 import { MAX_COLORS, type Config, type RGB } from '../config';
 import { useConfig, useRenderInfo, type RenderPhase } from '../store';
-import {
-  BOX_SIZE, assignColors, buildOutline, createMask, generateStrips, groupHeights, mergeStrips, setStripHeight,
-  type MergedGeometry, type Mask, type Strip
-} from './generate';
+import { BOX_SIZE, ORNAMENT_COLOR, analyzeSource, buildArtwork, type Artwork } from './generate';
+import type { Analysis } from './analyze';
+import type { Element } from './compose';
+import { applyHeight, type StripLayout } from './stripGeometry';
 
 /** Beyond the orbit controls' max distance so the camera never passes a light. */
 const LIGHT_DISTANCE = 150;
@@ -17,19 +17,29 @@ const FILL_COLOR: RGB = [196, 214, 255];
 const SKY_COLOR: RGB = [236, 241, 255];
 const PAPER_UV_SCALE = 1.5;
 const GROUND_UV_SCALE = 0.35;
+/** Default view angle from straight above, in degrees. */
+const CAMERA_TILT = 25;
 
 type Keys = (keyof Config)[];
-const MASK_KEYS: Keys = ['maskText', 'maskTextFont', 'maskTextSize', 'maskImage'];
-const STRIP_KEYS: Keys = ['seed', 'number', 'trail', 'noiseScale', 'thickness', 'imperfection', 'curl'];
-const GROUP_KEYS: Keys = ['colorNumber', 'clusterColors'];
-const HEIGHT_KEYS: Keys = ['minHeight', 'maxHeight'];
-const OUTLINE_GEOMETRY_KEYS: Keys = ['outlineThickness', 'outlineHeight', 'imperfection'];
-const MATERIAL_KEYS: Keys = ['paperRoughness', 'paperTexture', 'bumpScale', 'translucency', 'bevel', 'colors', 'outlineColor'];
-const VISIBILITY_KEYS: Keys = ['paperVisible', 'outlineVisible'];
-const GROUND_KEYS: Keys = ['showPlane', 'planeColor', 'shadowColor', 'shadowIntensity', 'backgroundColor'];
+const ANALYSIS_KEYS: Keys = ['image', 'colorNumber', 'detail', 'removeBackground'];
+const BUILD_KEYS: Keys = [
+  'seed', 'elementSize', 'minElementSize', 'gap', 'flowers', 'thickness', 'imperfection',
+  'coilTurns', 'coilEccentricity', 'tipPull', 'heightJitter',
+  'contourLines', 'contourSpacing', 'lineFill', 'ornaments', 'baseCard', 'swirls', 'swirlStrips', 'swirlSize'
+];
+const HEIGHT_KEYS: Keys = ['stripHeight', 'silhouette'];
+const VARIATION_KEYS: Keys = ['heightVariation'];
+const MATERIAL_KEYS: Keys = [
+  'paperRoughness', 'paperTexture', 'bumpScale', 'translucency', 'bevel', 'colorBoost', 'ornamentColor', 'cardTone'
+];
+/** Image colors plus the ornament paper. */
+const PAPER_SLOTS = MAX_COLORS + 1;
+const VISIBILITY_KEYS: Keys = ['paperVisible', 'silhouette'];
+const GROUND_KEYS: Keys = ['showPlane', 'planeColor', 'planeGloss', 'planeRoughness', 'shadowColor', 'shadowIntensity', 'backgroundColor'];
 const LIGHT_KEYS: Keys = ['lightDirection', 'lightIntensity', 'lightSoftness', 'lightColor', 'fillIntensity', 'skyIntensity'];
 const DISPLAY_KEYS: Keys = ['exposure', 'toneMapping', 'contrast', 'saturation', 'vignette', 'bloom'];
 const RENDER_KEYS: Keys = ['maxSamples', 'bounces', 'denoise', 'liveDenoise'];
+const SCALE_KEYS: Keys = ['renderScale'];
 
 function changed(prev: Config | null, next: Config, keys: Keys) {
   return !prev || keys.some(key => prev[key] !== next[key]);
@@ -66,9 +76,16 @@ export class PaperRenderer {
 
   /** Z-up group holding the artwork; rotated so Z maps to world Y. */
   private content = new THREE.Group();
-  private paperMeshes: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>[] = [];
-  private outlineMesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
-  private ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  /** Instanced pieces, one batch per prototype and color, and contour strips per color. */
+  private paperGroup = new THREE.Group();
+  private paperMaterials: THREE.MeshStandardMaterial[] = [];
+  private batches: { mesh: THREE.InstancedMesh; elements: Element[] }[] = [];
+  private prototypes: THREE.BufferGeometry[] = [];
+  private contourMeshes: THREE.Mesh[] = [];
+  /** Base card under each region, one material per palette color. */
+  private cardMeshes: THREE.Mesh[] = [];
+  private cardMaterials: THREE.MeshStandardMaterial[] = [];
+  private ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshPhysicalMaterial>;
   // Analytic area lights only: no environment map or ambient term.
   private keyLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
   private fillLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
@@ -79,15 +96,14 @@ export class PaperRenderer {
   private normalMap: THREE.Texture;
 
   private config: Config | null = null;
-  private mask: Mask | null = null;
-  private strips: Strip[] = [];
-  private colorIndices: Uint8Array = new Uint8Array(0);
-  /** Merged strips per paper mesh, kept so heights can change in place. */
-  private layers: (MergedGeometry | null)[] = [];
+  private analysis: Analysis | null = null;
+  private artwork: Artwork | null = null;
   private generation = 0;
   private generateTimer = 0;
   private unsubscribers: (() => void)[] = [];
   private resizeObserver: ResizeObserver;
+  /** Viewport size at full screen resolution, in device pixels. */
+  private fullSize = { width: 1, height: 1 };
   private disposed = false;
 
   constructor(private container: HTMLElement) {
@@ -100,19 +116,18 @@ export class PaperRenderer {
     this.scene.add(this.content);
     this.scene.userData.mutracerHiddenBackground = true;
 
-    for (let i = 0; i < MAX_COLORS; i++) {
-      const mesh = new THREE.Mesh(new THREE.BufferGeometry(), createPaperMaterial());
-      mesh.visible = false;
-      this.paperMeshes.push(mesh);
-      this.content.add(mesh);
+    for (let i = 0; i < PAPER_SLOTS; i++) {
+      this.paperMaterials.push(createPaperMaterial());
     }
-    this.outlineMesh = new THREE.Mesh(new THREE.BufferGeometry(), createPaperMaterial());
-    this.outlineMesh.visible = false;
-    this.content.add(this.outlineMesh);
+    for (let i = 0; i < MAX_COLORS; i++) {
+      this.cardMaterials.push(createPaperMaterial());
+    }
+    this.content.add(this.paperGroup);
 
     this.ground = new THREE.Mesh(
       new THREE.PlaneGeometry(BOX_SIZE * 2, BOX_SIZE * 2),
-      new THREE.MeshStandardMaterial({ roughness: 0.9 })
+      // Matte paper under a clear coat, like a varnished or laminated board.
+      new THREE.MeshPhysicalMaterial({ roughness: 0.9 })
     );
     this.content.add(this.ground);
 
@@ -124,7 +139,8 @@ export class PaperRenderer {
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
-    this.controls.enablePan = false;
+    // Standard orbit controls: left drag orbits, right drag pans, wheel zooms.
+    this.controls.screenSpacePanning = true;
     this.controls.minDistance = 4;
     this.controls.maxDistance = 120;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.05;
@@ -143,7 +159,6 @@ export class PaperRenderer {
     });
 
     this.bindStatus();
-    this.bindSpin();
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -184,42 +199,6 @@ export class PaperRenderer {
     });
   }
 
-  /** Right mouse drag spins the artwork around its vertical axis. */
-  private bindSpin() {
-    let spinning = false;
-    let prevX = 0;
-    let angle = 0;
-    const onDown = (e: PointerEvent) => {
-      if (e.button === 2) {
-        spinning = true;
-        prevX = e.clientX;
-        angle = useConfig.getState().config.spinAngle;
-        this.canvas.setPointerCapture(e.pointerId);
-      }
-    };
-    const onMove = (e: PointerEvent) => {
-      if (spinning) {
-        angle += (e.clientX - prevX) / 200;
-        prevX = e.clientX;
-        // Wrap to [-PI, PI] so the UI slider stays in range.
-        angle = Math.atan2(Math.sin(angle), Math.cos(angle));
-        useConfig.getState().set({ spinAngle: angle });
-      }
-    };
-    const onUp = () => { spinning = false; };
-    const onContextMenu = (e: Event) => e.preventDefault();
-    this.canvas.addEventListener('pointerdown', onDown);
-    this.canvas.addEventListener('pointermove', onMove);
-    this.canvas.addEventListener('pointerup', onUp);
-    this.canvas.addEventListener('contextmenu', onContextMenu);
-    this.unsubscribers.push(() => {
-      this.canvas.removeEventListener('pointerdown', onDown);
-      this.canvas.removeEventListener('pointermove', onMove);
-      this.canvas.removeEventListener('pointerup', onUp);
-      this.canvas.removeEventListener('contextmenu', onContextMenu);
-    });
-  }
-
   private resize() {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
@@ -227,17 +206,24 @@ export class PaperRenderer {
       return;
     }
     const ratio = Math.min(window.devicePixelRatio, 2);
-    this.engine.display.setSize(Math.round(width * ratio), Math.round(height * ratio));
+    this.fullSize = { width: Math.round(width * ratio), height: Math.round(height * ratio) };
+    // The viewport traces at a fraction of the screen resolution; exports use the full size.
+    const scale = this.config?.renderScale ?? 1;
+    this.engine.display.setSize(
+      Math.max(1, Math.round(this.fullSize.width * scale)),
+      Math.max(1, Math.round(this.fullSize.height * scale))
+    );
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   }
 
-  /** Top view that fits the whole board in the viewport. */
+  /** Slightly tilted view that fits the whole board, so the strip walls show. */
   resetCamera() {
     const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
     const fitSize = BOX_SIZE * 1.08;
     const distance = fitSize / (tanHalf * Math.min(this.camera.aspect, 1)) + 1;
-    this.camera.position.set(0, distance, 0.01);
+    const tilt = THREE.MathUtils.degToRad(CAMERA_TILT);
+    this.camera.position.set(0, distance * Math.cos(tilt), distance * Math.sin(tilt));
     this.controls.target.set(0, 0, 0);
     this.controls.update();
   }
@@ -251,20 +237,19 @@ export class PaperRenderer {
     }
     this.config = next;
 
-    if (changed(prev, next, MASK_KEYS)) {
+    if (changed(prev, next, ANALYSIS_KEYS)) {
       this.scheduleGenerate(true, prev !== null);
     }
-    else if (changed(prev, next, STRIP_KEYS)) {
+    else if (changed(prev, next, BUILD_KEYS)) {
       this.scheduleGenerate(false, true);
     }
-    else if (changed(prev, next, GROUP_KEYS)) {
-      this.regroup();
-    }
-    else if (changed(prev, next, HEIGHT_KEYS)) {
-      this.updateHeights();
-    }
-    if (prev && changed(prev, next, OUTLINE_GEOMETRY_KEYS) && !changed(prev, next, MASK_KEYS)) {
-      this.updateOutline();
+    else {
+      if (changed(prev, next, HEIGHT_KEYS)) {
+        this.updateStripHeight();
+      }
+      if (changed(prev, next, VARIATION_KEYS)) {
+        this.updateMatrices();
+      }
     }
     if (changed(prev, next, MATERIAL_KEYS)) {
       this.updateMaterials();
@@ -284,6 +269,9 @@ export class PaperRenderer {
     if (changed(prev, next, RENDER_KEYS)) {
       this.updateRenderSettings();
     }
+    if (changed(prev, next, SCALE_KEYS)) {
+      this.resize();
+    }
     if (!prev || prev.spinAngle !== next.spinAngle) {
       this.content.rotation.z = next.spinAngle;
     }
@@ -293,29 +281,15 @@ export class PaperRenderer {
     }
   }
 
-  private scheduleGenerate(maskChanged: boolean, debounce: boolean) {
+  private scheduleGenerate(reanalyze: boolean, debounce: boolean) {
     clearTimeout(this.generateTimer);
     useRenderInfo.setState({ generating: true });
-    this.generateTimer = window.setTimeout(() => this.generate(maskChanged), debounce ? 250 : 0);
+    this.generateTimer = window.setTimeout(() => this.generate(reanalyze), debounce ? 250 : 0);
   }
 
-  private async generate(maskChanged: boolean) {
+  private async generate(reanalyze: boolean) {
     const token = ++this.generation;
-    const config = this.config!;
     try {
-      if (maskChanged) {
-        const mask = await createMask({
-          text: config.maskText,
-          font: config.maskTextFont,
-          textSize: config.maskTextSize,
-          image: config.maskImage
-        });
-        if (token !== this.generation) {
-          return;
-        }
-        this.mask = mask;
-        this.updateOutline();
-      }
       // Let the "generating" indicator paint before the synchronous work.
       // rAF does not fire in background tabs, so race it with a timer.
       await new Promise(resolve => {
@@ -325,8 +299,48 @@ export class PaperRenderer {
       if (token !== this.generation) {
         return;
       }
-      this.strips = generateStrips(this.config!, this.mask);
-      this.regroup();
+      if (reanalyze || !this.analysis) {
+        const config = this.config!;
+        const resolution = Math.round(config.detail);
+        const analysis = await analyzeSource(config.image, {
+          colors: Math.min(Math.max(Math.round(config.colorNumber), 2), MAX_COLORS),
+          resolution,
+          // Specks smaller than a small piece of paper merge into their neighbours.
+          minRegion: Math.max(6, Math.round((resolution / 60) ** 2)),
+          removeBackground: config.removeBackground
+        });
+        if (token !== this.generation) {
+          return;
+        }
+        this.analysis = analysis;
+      }
+      const config = this.config!;
+      this.artwork = buildArtwork(this.analysis, {
+        seed: config.seed,
+        size: config.elementSize,
+        minSize: config.minElementSize,
+        gap: config.gap,
+        flowers: config.flowers,
+        turns: config.coilTurns,
+        eccentricity: config.coilEccentricity,
+        tipPull: config.tipPull,
+        heightJitter: config.heightJitter,
+        thickness: config.thickness,
+        imperfection: config.imperfection,
+        contourLines: config.contourLines,
+        contourSpacing: config.contourSpacing,
+        lineFill: config.lineFill,
+        ornaments: config.ornaments,
+        baseCard: config.baseCard,
+        swirls: config.swirls,
+        swirlStrips: config.swirlStrips,
+        swirlSize: config.swirlSize,
+        // Always built; a zero height hides it without a rebuild.
+        silhouette: true
+      });
+      useRenderInfo.setState({ palette: this.artwork.palette });
+      this.updateMaterials();
+      this.buildMeshes();
     }
     catch (e) {
       console.error('Failed to generate papers', e);
@@ -338,72 +352,132 @@ export class PaperRenderer {
     }
   }
 
-  private regroup() {
-    const config = this.config!;
-    const colorCount = Math.min(Math.max(Math.round(config.colorNumber), 1), MAX_COLORS);
-    this.colorIndices = assignColors(this.strips, colorCount, config.clusterColors, config.seed);
-    const heights = groupHeights(colorCount, config.minHeight, config.maxHeight);
+  /** `relative` scales the strip height, e.g. for the taller silhouette strip. */
+  private layoutGeometry(layout: StripLayout & { normal: Float32Array; indices: Uint32Array }, relative?: () => number) {
+    const geometry = new THREE.BufferGeometry();
+    const height = this.config!.stripHeight * (relative ? relative() : 1);
+    geometry.setAttribute('position', new THREE.BufferAttribute(applyHeight(layout, height), 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(layout.normal, 3));
+    geometry.setIndex(new THREE.BufferAttribute(layout.indices, 1));
+    geometry.userData.layout = layout;
+    geometry.userData.relative = relative;
+    return geometry;
+  }
+
+  /** Rebuilds the instanced batches and contour meshes from the artwork. */
+  private buildMeshes() {
+    for (const { mesh } of this.batches) {
+      this.paperGroup.remove(mesh);
+      mesh.dispose();
+    }
+    for (const mesh of [...this.contourMeshes, ...this.cardMeshes]) {
+      this.paperGroup.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    this.prototypes.forEach(geometry => geometry.dispose());
+    this.batches = [];
+    this.contourMeshes = [];
+    this.cardMeshes = [];
+    const artwork = this.artwork;
+    if (!artwork) {
+      return;
+    }
+
+    this.prototypes = artwork.prototypes.map(mesh => this.layoutGeometry(mesh));
+    const buckets = new Map<number, Element[]>();
+    for (const element of artwork.elements) {
+      const key = element.prototype * PAPER_SLOTS + element.color;
+      let list = buckets.get(key);
+      if (!list) {
+        buckets.set(key, list = []);
+      }
+      list.push(element);
+    }
+    for (const [key, elements] of buckets) {
+      const geometry = this.prototypes[Math.floor(key / PAPER_SLOTS)];
+      const mesh = new THREE.InstancedMesh(geometry, this.paperMaterials[key % PAPER_SLOTS], elements.length);
+      this.batches.push({ mesh, elements });
+      this.paperGroup.add(mesh);
+    }
 
     let triangleCount = 0;
-    this.layers = [];
-    this.paperMeshes.forEach((mesh, idx) => {
-      mesh.geometry.dispose();
-      if (idx >= colorCount) {
-        mesh.geometry = new THREE.BufferGeometry();
-        this.layers.push(null);
-        return;
-      }
-      const strips = this.strips.filter((_, i) => this.colorIndices[i] === idx);
-      const merged = mergeStrips(strips, heights[idx]);
-      this.layers.push(merged);
-      const { position, normal, indices } = merged;
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
-      geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
-      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-      mesh.geometry = geometry;
-      triangleCount += indices.length / 3;
-    });
-    useRenderInfo.setState({ paperCount: this.strips.length, triangleCount });
-    this.updateVisibility();
-  }
-
-  private updateHeights() {
-    const config = this.config!;
-    const heights = groupHeights(this.paperMeshes.length, config.minHeight, config.maxHeight);
-    this.paperMeshes.forEach((mesh, idx) => {
-      const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
-      const layer = this.layers[idx];
-      if (attr && layer) {
-        setStripHeight(layer, heights[idx]);
-        attr.needsUpdate = true;
-      }
-    });
-  }
-
-  private updateOutline() {
-    const config = this.config!;
-    this.outlineMesh.geometry.dispose();
-    this.outlineMesh.geometry = new THREE.BufferGeometry();
-    if (this.mask && config.outlineThickness > 0 && config.outlineHeight > 0) {
-      const { position, normal, indices } = buildOutline(
-        this.mask, config.outlineThickness, config.outlineHeight, config.imperfection, 0
-      );
-      const geometry = this.outlineMesh.geometry;
-      geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
-      geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
-      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    for (const geometry of this.prototypes) {
+      triangleCount += geometry.index!.count / 3;
     }
+    artwork.contours.forEach((layout, color) => {
+      if (layout) {
+        const mesh = new THREE.Mesh(this.layoutGeometry(layout), this.paperMaterials[color]);
+        mesh.userData.level = artwork.levels[color];
+        this.contourMeshes.push(mesh);
+        this.paperGroup.add(mesh);
+        triangleCount += layout.indices.length / 3;
+      }
+    });
+    artwork.cards.forEach((card, color) => {
+      if (card) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(card.position, 3));
+        geometry.setAttribute('normal', new THREE.BufferAttribute(card.normal, 3));
+        geometry.setIndex(new THREE.BufferAttribute(card.indices, 1));
+        const mesh = new THREE.Mesh(geometry, this.cardMaterials[color]);
+        this.cardMeshes.push(mesh);
+        this.paperGroup.add(mesh);
+        triangleCount += card.indices.length / 3;
+      }
+    });
+    this.updateMatrices();
+    if (artwork.silhouette) {
+      const geometry = this.layoutGeometry(artwork.silhouette, () => this.config!.silhouette);
+      const mesh = new THREE.Mesh(geometry, this.paperMaterials[ORNAMENT_COLOR]);
+      this.contourMeshes.push(mesh);
+      this.paperGroup.add(mesh);
+      triangleCount += artwork.silhouette.indices.length / 3;
+    }
+    useRenderInfo.setState({ paperCount: artwork.elements.length, triangleCount });
     this.updateVisibility();
+  }
+
+  private updateMatrices() {
+    const variation = this.config!.heightVariation;
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const rotation = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const axis = new THREE.Vector3(0, 0, 1);
+    for (const { mesh, elements } of this.batches) {
+      elements.forEach((e, i) => {
+        position.set(e.x, e.y, 0);
+        rotation.setFromAxisAngle(axis, e.rotation);
+        scale.set(e.scale, e.scale, Math.max(1 + variation * e.height, 0.2));
+        mesh.setMatrixAt(i, matrix.compose(position, rotation, scale));
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    // Contour strips follow their region's height level.
+    for (const mesh of this.contourMeshes) {
+      const level: number | undefined = mesh.userData.level;
+      mesh.scale.z = level === undefined ? 1 : Math.max(1 + variation * level * 0.7, 0.2);
+    }
+  }
+
+  private updateStripHeight() {
+    const height = this.config!.stripHeight;
+    const geometries = [...this.prototypes, ...this.contourMeshes.map(mesh => mesh.geometry)];
+    for (const geometry of geometries) {
+      const attr = geometry.getAttribute('position') as THREE.BufferAttribute;
+      const relative: (() => number) | undefined = geometry.userData.relative;
+      applyHeight(geometry.userData.layout, height * (relative ? relative() : 1), attr.array as Float32Array);
+      attr.needsUpdate = true;
+    }
   }
 
   private updateVisibility() {
-    const config = this.config!;
-    const colorCount = Math.round(config.colorNumber);
-    this.paperMeshes.forEach((mesh, idx) => {
-      mesh.visible = config.paperVisible && idx < colorCount && !!mesh.geometry.index;
-    });
-    this.outlineMesh.visible = config.outlineVisible && !!this.mask && !!this.outlineMesh.geometry.index;
+    this.paperGroup.visible = this.config!.paperVisible;
+    for (const mesh of this.contourMeshes) {
+      if (mesh.geometry.userData.relative) {
+        mesh.visible = this.config!.silhouette > 0;
+      }
+    }
   }
 
   private getTexture(url: string) {
@@ -440,19 +514,46 @@ export class PaperRenderer {
       // MuTracer conversion picks up the new renderer specific settings.
       material.needsUpdate = true;
     };
-    this.paperMeshes.forEach((mesh, idx) => setup(mesh.material, config.colors[idx], PAPER_UV_SCALE));
-    setup(this.outlineMesh.material, config.outlineColor, PAPER_UV_SCALE);
+    const palette = this.artwork?.palette ?? [];
+    const hsl = { h: 0, s: 0, l: 0 };
+    this.paperMaterials.forEach((material, idx) => {
+      if (idx === ORNAMENT_COLOR) {
+        setup(material, config.ornamentColor, PAPER_UV_SCALE);
+        return;
+      }
+      // Colored paper is usually more saturated than a photo of the subject.
+      const [r, g, b] = palette[idx] ?? [200, 200, 200];
+      const color = new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+      color.getHSL(hsl, THREE.SRGBColorSpace);
+      color.setHSL(hsl.h, Math.min(1, hsl.s * config.colorBoost), hsl.l, THREE.SRGBColorSpace);
+      const srgb = { r: 0, g: 0, b: 0 };
+      color.getRGB(srgb, THREE.SRGBColorSpace);
+      const paper: RGB = [srgb.r * 255, srgb.g * 255, srgb.b * 255];
+      setup(material, paper, PAPER_UV_SCALE);
+      if (idx < MAX_COLORS) {
+        // The base card is a darker or lighter stock of the same hue.
+        const tone = config.cardTone;
+        const card = paper.map(c => (tone < 0 ? c * (1 + tone) : c + (255 - c) * tone)) as RGB;
+        setup(this.cardMaterials[idx], card, PAPER_UV_SCALE);
+        // A flat card does not glow through like a strip on edge.
+        this.cardMaterials[idx].userData.mutracerOpenPBR.subsurfaceWeight = 0;
+      }
+    });
   }
 
   private updateGround() {
     const config = this.config!;
     const material = this.ground.material;
     setColor(material.color, config.planeColor);
+    material.clearcoat = config.planeGloss;
+    material.clearcoatRoughness = config.planeRoughness;
     material.map = config.paperTexture ? this.getTexture(config.paperTexture) : null;
     material.userData = {
       mutracerShadowCatcher: !config.showPlane,
       mutracerUvProjection: 'triplanar',
-      mutracerUvProjectionScale: [GROUND_UV_SCALE, GROUND_UV_SCALE]
+      mutracerUvProjectionScale: [GROUND_UV_SCALE, GROUND_UV_SCALE],
+      // A denser coat than Three.js' default reflects more at normal incidence.
+      mutracerOpenPBR: { coatIor: 1.5 + config.planeGloss * 0.4 }
     };
     material.needsUpdate = true;
     // The catcher covers the whole frame so shadows are never clipped.
@@ -583,11 +684,9 @@ export class PaperRenderer {
     });
   }
 
-  /** Snapshot of what is currently converged in the viewport. */
+  /** The current view at full resolution, with the viewport's sample count. */
   async snapshot() {
-    const { final, preview } = this.loop;
-    const render = final.samples > 0 || !preview ? final : preview;
-    return this.composite(await this.engine.display.toBlob(render));
+    return this.renderImage({ ...this.fullSize, samples: this.config!.maxSamples });
   }
 
   /** Renders a fixed size image offline with the current camera. */
@@ -630,8 +729,9 @@ export class PaperRenderer {
     }
   }
 
+  /** Full resolution size of the viewport, whatever it traces at. */
   get viewportSize() {
-    return { width: this.canvas.width, height: this.canvas.height };
+    return { ...this.fullSize };
   }
 
   dispose() {

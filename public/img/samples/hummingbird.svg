@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <!-- A hummingbird sipping from a hibiscus. -->
+  <rect width="600" height="600" fill="#f5f0e6" />
+  <!-- Leaves -->
+  <path fill="#5f9e4a" d="M 380 560 C 380 500 420 460 480 450 C 470 500 440 540 380 560 Z" />
+  <path fill="#3f7d4a" d="M 540 470 C 500 460 470 420 470 380 C 520 390 548 420 540 470 Z" />
+  <!-- Hibiscus -->
+  <g transform="translate(460 440)">
+    <path fill="#e8553d" d="M 0 0 C -30 -40 -20 -100 20 -110 C 50 -100 50 -40 0 0 Z" />
+    <path fill="#e8553d" d="M 0 0 C 40 -30 100 -30 112 10 C 100 44 40 40 0 0 Z" />
+    <path fill="#e8553d" d="M 0 0 C 36 30 40 92 2 110 C -32 104 -36 44 0 0 Z" />
+    <path fill="#e8553d" d="M 0 0 C -40 32 -100 32 -112 -4 C -100 -40 -40 -36 0 0 Z" />
+    <path fill="#f07a55" d="M 0 0 C -28 -10 -60 -56 -50 -84 C -20 -84 0 -40 0 0 Z" />
+    <circle r="16" fill="#a62d3f" />
+  </g>
+  <path d="M 460 440 L 408 380" stroke="#f2c14e" stroke-width="7" stroke-linecap="round" />
+  <circle cx="404" cy="375" r="9" fill="#f2c14e" />
+  <!-- Tail -->
+  <path fill="#1f6f6a" d="M 214 330 L 110 412 L 140 424 L 230 352 Z" />
+  <path fill="#2f8f86" d="M 222 340 L 136 444 L 168 450 L 242 360 Z" />
+  <!-- Body -->
+  <ellipse cx="290" cy="300" rx="112" ry="54" transform="rotate(-28 290 300)" fill="#2f9e8f" />
+  <ellipse cx="300" cy="318" rx="70" ry="28" transform="rotate(-28 300 318)" fill="#c9e7c2" />
+  <!-- Wings -->
+  <path fill="#3b6fb6" d="M 300 262 C 250 160 196 104 120 82 C 164 150 196 222 262 292 Z" />
+  <path fill="#6aa5d8" d="M 292 268 C 256 196 216 150 168 124 C 194 176 222 230 264 284 Z" />
+  <!-- Head -->
+  <circle cx="380" cy="230" r="46" fill="#3fb07f" />
+  <path fill="#d63f7a" d="M 352 254 C 370 286 410 284 424 254 C 404 262 374 264 352 254 Z" />
+  <path fill="#3a3a3a" d="M 418 214 L 548 178 L 422 232 Z" />
+  <circle cx="392" cy="218" r="10" fill="#fdfaf2" />
+  <circle cx="394" cy="218" r="5" fill="#1d1d1d" />
+</svg>

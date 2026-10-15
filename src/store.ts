@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { createDefaultConfig, type Config } from './config';
+import { createDefaultConfig, type Config, type RGB } from './config';
 
 const STORAGE_KEY = 'paper-quilling-config';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 15;
 const HISTORY_LIMIT = 50;
 /** Edits closer together than this merge into one undo step (slider drags). */
 const HISTORY_MERGE_MS = 400;
@@ -15,8 +15,12 @@ function loadConfig(): Config {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (saved && saved.version === SCHEMA_VERSION) {
+      const config = { ...defaults, ...saved.config };
       // Object URLs do not survive a reload.
-      return { ...defaults, ...saved.config, maskImage: '' };
+      if (config.image.startsWith('blob:')) {
+        config.image = defaults.image;
+      }
+      return config;
     }
   }
   catch (e) {
@@ -125,6 +129,8 @@ export interface RenderInfo {
   error?: string;
   paperCount: number;
   triangleCount: number;
+  /** Paper colors found in the image. */
+  palette: RGB[];
 }
 
 export const useRenderInfo = create<RenderInfo>(() => ({
@@ -135,5 +141,6 @@ export const useRenderInfo = create<RenderInfo>(() => ({
   adapter: '',
   generating: false,
   paperCount: 0,
-  triangleCount: 0
+  triangleCount: 0,
+  palette: []
 }));

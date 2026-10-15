@@ -45,6 +45,9 @@ export function RenderPanel() {
       </Section>
 
       <Section title="Path tracing" icon={<IconSparkles size={15} />}>
+        <SliderField name="renderScale" label="Viewport resolution" min={0.25} max={1} step={0.05}
+          format={v => `${Math.round(v * 100)}%`}
+          hint="Resolution the viewport traces at. Snapshots and exports always render at full resolution." />
         <SliderField name="maxSamples" label="Samples" min={16} max={4096} step={16}
           hint="Samples per pixel accumulated in the viewport before it stops." />
         <SliderField name="bounces" label="Bounces" min={1} max={12} step={1} />

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 600" width="600" height="600">
+  <!-- A butterfly with banded, spotted wings. -->
+  <defs>
+    <g id="wings">
+      <!-- Upper wing -->
+      <path fill="#2f3b6b" d="M 300 280 C 330 160 430 70 540 92 C 580 160 540 260 420 300 C 380 312 340 304 300 280 Z" />
+      <path fill="#f08a3c" d="M 306 276 C 336 176 424 104 516 118 C 540 170 510 244 414 280 C 376 292 340 290 306 276 Z" />
+      <path fill="#f7c64e" d="M 330 262 C 360 200 410 160 460 156 C 452 210 410 252 360 268 Z" />
+      <circle cx="486" cy="150" r="14" fill="#fff1b8" />
+      <circle cx="512" cy="196" r="10" fill="#fff1b8" />
+      <!-- Lower wing -->
+      <path fill="#2f3b6b" d="M 300 300 C 380 300 470 330 490 410 C 480 480 400 500 350 450 C 320 420 300 360 300 300 Z" />
+      <path fill="#3f8fc0" d="M 306 308 C 376 312 454 338 468 404 C 460 456 404 470 362 434 C 334 408 312 360 306 308 Z" />
+      <circle cx="420" cy="410" r="20" fill="#f7c64e" />
+      <circle cx="420" cy="410" r="9" fill="#2f3b6b" />
+    </g>
+  </defs>
+  <rect width="600" height="600" fill="#f5f0e6" />
+  <use xlink:href="#wings" />
+  <use xlink:href="#wings" transform="translate(600 0) scale(-1 1)" />
+  <!-- Body and antennae -->
+  <ellipse cx="300" cy="320" rx="16" ry="110" fill="#3a2a2a" />
+  <circle cx="300" cy="200" r="20" fill="#3a2a2a" />
+  <path d="M 292 186 C 270 140 250 120 228 112" fill="none" stroke="#3a2a2a" stroke-width="6" stroke-linecap="round" />
+  <path d="M 308 186 C 330 140 350 120 372 112" fill="none" stroke="#3a2a2a" stroke-width="6" stroke-linecap="round" />
+  <circle cx="226" cy="110" r="9" fill="#3a2a2a" />
+  <circle cx="374" cy="110" r="9" fill="#3a2a2a" />
+</svg>

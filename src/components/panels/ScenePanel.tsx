@@ -106,7 +106,15 @@ export function ScenePanel() {
         <SwitchField name="showPlane" label="Paper board"
           hint="Turn off to render only the shadows over the background color." />
         {showPlane
-          ? <ColorField name="planeColor" label="Board" />
+          ? (
+            <>
+              <ColorField name="planeColor" label="Board" />
+              <SliderField name="planeGloss" label="Gloss" min={0} max={1} step={0.01}
+                hint="Clear coat on the board, which reflects the light and the paper strips." />
+              <SliderField name="planeRoughness" label="Gloss blur" min={0} max={0.6} step={0.01}
+                hint="Lower values give a sharper, mirror-like reflection." />
+            </>
+          )
           : (
             <>
               <ColorField name="shadowColor" label="Shadow" />

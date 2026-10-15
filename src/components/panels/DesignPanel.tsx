@@ -1,82 +1,40 @@
-import { ActionIcon, Button, Group, Popover, SimpleGrid, Stack, Tooltip, UnstyledButton } from '@mantine/core';
-import { IconArrowsShuffle, IconDice5, IconPalette, IconColorSwatch, IconSwitchVertical, IconWaveSine } from '@tabler/icons-react';
-import { MAX_COLORS, PALETTES, paletteColors, rgbToHex, type Palette, type RGB } from '../../config';
-import { setConfig, useConfig, useConfigValue } from '../../store';
-import { ColorPopover, Note, Section, SliderField, SwitchField } from '../fields';
+import { Button, SimpleGrid, Stack, Tooltip } from '@mantine/core';
+import { IconDice5, IconLayersSubtract, IconLine, IconPalette, IconSpiral, IconTornado, IconWaveSine } from '@tabler/icons-react';
+import { STYLES, type Config } from '../../config';
+import { setConfig, useConfig } from '../../store';
+import { ColorField, Note, Section, SliderField, SwitchField } from '../fields';
 
-function gradient(palette: Palette) {
-  const stops = Array.from({ length: 8 }, (_, i) => palette.sample(1 - i / 7));
-  return `linear-gradient(90deg, ${stops.join(',')})`;
-}
-
-function PalettePicker() {
+function StylePicker() {
+  // A style is active while every one of its settings is unchanged.
+  const active = useConfig(state => STYLES.findIndex(style =>
+    (Object.keys(style.settings) as (keyof Config)[]).every(key => state.config[key] === style.settings[key])));
   return (
-    <Popover width={280} position="bottom-end" withArrow>
-      <Popover.Target>
-        <Tooltip label="Palettes">
-          <ActionIcon size="sm" aria-label="Pick a palette"><IconPalette size={16} /></ActionIcon>
+    <SimpleGrid cols={2} spacing={6}>
+      {STYLES.map((style, idx) => (
+        <Tooltip key={style.name} label={style.description} multiline w={220}>
+          <Button
+            size="xs"
+            variant={idx === active ? 'filled' : 'light'}
+            onClick={() => setConfig(style.settings)}
+          >
+            {style.name}
+          </Button>
         </Tooltip>
-      </Popover.Target>
-      <Popover.Dropdown p={10}>
-        <SimpleGrid cols={2} spacing={8} verticalSpacing={8}>
-          {PALETTES.map(palette => (
-            <UnstyledButton
-              key={palette.name}
-              className="palette-option"
-              onClick={() => setConfig({ colors: paletteColors(palette) })}
-            >
-              <span className="palette-gradient" style={{ background: gradient(palette) }} />
-              <span className="palette-name">{palette.name}</span>
-            </UnstyledButton>
-          ))}
-        </SimpleGrid>
-      </Popover.Dropdown>
-    </Popover>
-  );
-}
-
-function ColorStrip() {
-  const colors = useConfigValue('colors');
-  const colorNumber = useConfigValue('colorNumber');
-
-  const setColor = (idx: number, rgb: RGB) => {
-    const next = colors.slice();
-    next[idx] = rgb;
-    setConfig({ colors: next });
-  };
-
-  return (
-    <div className="color-strip">
-      {colors.slice(0, colorNumber).map((color, idx) => (
-        <ColorPopover key={idx} value={color} onChange={rgb => setColor(idx, rgb)}>
-          <button
-            type="button"
-            className="color-strip-item"
-            style={{ background: rgbToHex(color) }}
-            aria-label={`Color ${idx + 1}`}
-            title={rgbToHex(color).toUpperCase()}
-          />
-        </ColorPopover>
       ))}
-    </div>
+    </SimpleGrid>
   );
 }
 
 export function DesignPanel() {
-  const randomPalette = () => {
-    const palette = PALETTES[Math.floor(Math.random() * PALETTES.length)];
-    setConfig({ colors: paletteColors(palette) });
-  };
-  const reverseColors = () => {
-    const { colors, colorNumber } = useConfig.getState().config;
-    const used = colors.slice(0, colorNumber).reverse();
-    setConfig({ colors: [...used, ...colors.slice(colorNumber)] });
-  };
-
   return (
     <Stack gap={12}>
+      <Section title="Style" icon={<IconPalette size={15} />}>
+        <StylePicker />
+        <Note>Each style sets the options below; tune any of them afterwards.</Note>
+      </Section>
+
       <Section
-        title="Strips"
+        title="Pieces"
         icon={<IconWaveSine size={15} />}
         right={
           <Button
@@ -89,46 +47,60 @@ export function DesignPanel() {
           </Button>
         }
       >
-        <SliderField name="number" label="Count" min={50} max={3000} step={10}
-          hint="Number of paper strips. High counts take longer to build and trace." />
-        <SliderField name="trail" label="Length" min={20} max={300} step={5}
-          hint="Maximum number of steps each strip follows the noise field." />
-        <SliderField name="noiseScale" label="Swirl" min={0.5} max={10} step={0.1}
-          hint="Scale of the Perlin flow field. Larger values give bigger swirls." />
-        <SliderField name="thickness" label="Thickness" min={0.005} max={0.08} step={0.001} />
+        <SliderField name="elementSize" label="Size" min={0.3} max={2.5} step={0.05}
+          hint="Half length of the largest pieces. Smaller pieces fill the gaps down to the minimum size." />
+        <SliderField name="minElementSize" label="Min size" min={0.1} max={1} step={0.01} />
+        <SliderField name="flowers" label="Flowers" min={0} max={1} step={0.05}
+          hint="Share of the largest spots that become flowers of petals around a tight coil." />
+        <SliderField name="gap" label="Gap" min={0} max={0.3} step={0.005} />
+        <SliderField name="coilTurns" label="Coil turns" min={2} max={16} step={1}
+          hint="Turns of paper in each loose coil. Fewer turns give open, airy coils." />
+        <SliderField name="coilEccentricity" label="Off-centre eye" min={0} max={1} step={0.05}
+          hint="How far the tight eye of a released coil drifts from its centre." />
+        <SliderField name="tipPull" label="Tip pull" min={0} max={4} step={0.1}
+          hint="How strongly pinching drags the inner turns towards the tip of a teardrop or leaf." />
+        <SliderField name="thickness" label="Paper thickness" min={0.005} max={0.03} step={0.001} />
+        <SliderField name="stripHeight" label="Strip width" min={0.1} max={1.5} step={0.01}
+          hint="How tall the paper stands on the board." />
+        <SliderField name="heightVariation" label="Height variation" min={0} max={1.5} step={0.01}
+          hint="How much the color regions and pieces differ in height. Flowers always stand a little prouder." />
+        <SliderField name="heightJitter" label="Piece height play" min={0} max={1.5} step={0.05}
+          hint="How much single pieces stray from their region's height." />
         <SliderField name="imperfection" label="Handmade" min={0} max={1} step={0.05}
           hint="How irregular the strips are: slight lean and uneven height, like hand glued paper." />
-        <SliderField name="curl" label="End curls" min={0} max={1} step={0.05}
-          hint="Chance that a strip end is rolled into a small scroll." />
-        <SliderField name="minHeight" label="Min height" min={0.05} max={3} step={0.05} />
-        <SliderField name="maxHeight" label="Max height" min={0.05} max={3} step={0.05} />
-        <SwitchField name="paperVisible" label="Show strips" />
+        <SwitchField name="paperVisible" label="Show paper" />
       </Section>
 
-      <Section
-        title="Colors"
-        icon={<IconColorSwatch size={15} />}
-        right={
-          <Group gap={0}>
-            <Tooltip label="Random palette">
-              <ActionIcon size="sm" aria-label="Random palette" onClick={randomPalette}>
-                <IconArrowsShuffle size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Reverse order">
-              <ActionIcon size="sm" aria-label="Reverse colors" onClick={reverseColors}>
-                <IconSwitchVertical size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <PalettePicker />
-          </Group>
-        }
-      >
-        <ColorStrip />
-        <Note>Click a swatch to edit it. Each color is a layer with its own height.</Note>
-        <SliderField name="colorNumber" label="Layers" min={1} max={MAX_COLORS} step={1} />
-        <SwitchField name="clusterColors" label="Group by area"
-          hint="Cluster strips by position so neighbouring strips share a color and height." />
+      <Section title="Swirls" icon={<IconTornado size={15} />}>
+        <SliderField name="swirls" label="Amount" min={0} max={1} step={0.05}
+          hint="Share of each color region given to big open swirls of several strips. 0 turns them off." />
+        <SliderField name="swirlStrips" label="Strips" min={1} max={6} step={1}
+          hint="Strips rolled together in each swirl, shaded from the region's color and its neighbours." />
+        <SliderField name="swirlSize" label="Size" min={1} max={4} step={0.1}
+          hint="Largest swirl radius relative to the largest piece." />
+      </Section>
+
+      <Section title="Base card" icon={<IconLayersSubtract size={15} />}>
+        <SwitchField name="baseCard" label="Card under regions"
+          hint="Glue each color region onto card cut to its shape, so gaps show color instead of the board." />
+        <SliderField name="cardTone" label="Card shade" min={-0.6} max={0.6} step={0.02}
+          hint="Card color relative to the paper: negative is darker, positive lighter." />
+      </Section>
+
+      <Section title="Contours" icon={<IconLine size={15} />}>
+        <SliderField name="contourLines" label="Outline strips" min={0} max={20} step={1}
+          hint="Strips running along the edge of every color region, including its outline. High values fill regions with contour lines." />
+        <SliderField name="contourSpacing" label="Spacing" min={0.03} max={0.3} step={0.005} />
+        <SliderField name="lineFill" label="Line fill" min={0.01} max={1} step={0.01}
+          hint="Regions larger than this share of the subject, like a face, are filled entirely with contour strips. 1 turns it off." />
+      </Section>
+
+      <Section title="Cream paper" icon={<IconSpiral size={15} />}>
+        <SliderField name="ornaments" label="Band" min={0} max={6} step={0.1}
+          hint="Width of the band of cream scrolls around the subject. 0 turns them off." />
+        <SliderField name="silhouette" label="Outline height" min={0} max={2.5} step={0.05}
+          hint="Height of the cream strip around the whole subject, relative to the other strips. 0 hides it." />
+        <ColorField name="ornamentColor" label="Color" />
       </Section>
     </Stack>
   );

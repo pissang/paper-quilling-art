@@ -24,12 +24,12 @@ export function ViewportOverlay() {
           <span className="hint-sep" />
           <span><kbd>Scroll</kbd> zoom</span>
           <span className="hint-sep" />
-          <span><kbd>Right drag</kbd> spin</span>
+          <span><kbd>Right drag</kbd> pan</span>
         </div>
       </div>
       <div className="overlay overlay-bottom-right">
         <div className="glass hint credits">
-          {paperCount.toLocaleString()} strips
+          {paperCount.toLocaleString()} pieces
           <span className="hint-sep" />
           {(triangleCount / 1000).toFixed(0)}k tris
           <span className="hint-sep" />
