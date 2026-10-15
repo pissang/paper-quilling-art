@@ -36,7 +36,7 @@ export function ImagePanel() {
   return (
     <Stack gap={12}>
       <Section title="Image" icon={<IconPhoto size={15} />}>
-        <SimpleGrid cols={5} spacing={6}>
+        <SimpleGrid cols={6} spacing={6}>
           {SAMPLES.map(sample => (
             <Tooltip key={sample.url} label={sample.name}>
               <UnstyledButton
@@ -76,6 +76,8 @@ export function ImagePanel() {
           hint="Paper is usually more saturated than a photo; raise this for punchier colors." />
         <SliderField name="detail" label="Detail" min={120} max={600} step={10}
           hint="Resolution the image is analysed at. Higher keeps smaller regions." />
+        <SliderField name="edgeSmoothing" label="Edge smoothing" min={0} max={8} step={0.5}
+          hint="Evens out the edges of the color regions, so outline strips run in smooth curves. Higher values round off corners." />
         <Note>Each color region is outlined by paper strips and filled with quilled pieces of that color.</Note>
       </Section>
     </Stack>

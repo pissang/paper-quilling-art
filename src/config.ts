@@ -19,6 +19,7 @@ export const STYLES: Style[] = [
     description: 'Coils, teardrops and leaves packed edge to edge.',
     settings: {
       lineFill: 1, contourLines: 0, silhouette: 0, baseCard: false, swirls: 0,
+      shadedContours: false, coilFillers: false, stripHeight: 0.38, contourSpacing: 0.07, ornaments: 2.5,
       flowers: 0.15, coilTurns: 6, heightVariation: 0.6
     }
   },
@@ -26,8 +27,10 @@ export const STYLES: Style[] = [
     name: 'Swirls',
     description: 'Big open swirls of several shaded strips, small coils in between.',
     settings: {
-      lineFill: 1, contourLines: 0, silhouette: 0, baseCard: false, swirls: 0.65,
-      swirlStrips: 4, swirlSize: 2.4, flowers: 0, coilTurns: 5, heightVariation: 0.8
+      // Tall strips in shaded bundles: outlines, big swirls and coils between them.
+      lineFill: 1, contourLines: 3, silhouette: 0, baseCard: false, swirls: 0.9,
+      shadedContours: true, coilFillers: true, stripHeight: 0.6, contourSpacing: 0.09, ornaments: 0,
+      swirlStrips: 6, swirlSize: 2.6, flowers: 0, coilTurns: 5, heightVariation: 0.3
     }
   },
   {
@@ -35,6 +38,7 @@ export const STYLES: Style[] = [
     description: 'Shapes cut from card, edged with a strip and filled with pieces.',
     settings: {
       lineFill: 1, contourLines: 1, silhouette: 1.3, baseCard: true, cardTone: -0.12,
+      shadedContours: false, coilFillers: false, stripHeight: 0.38, contourSpacing: 0.07, ornaments: 2.5,
       swirls: 0.25, swirlStrips: 2, swirlSize: 1.6, flowers: 0.3, coilTurns: 6, heightVariation: 0.35
     }
   },
@@ -43,7 +47,54 @@ export const STYLES: Style[] = [
     description: 'Large areas filled with flowing parallel strips, like a quilled portrait.',
     settings: {
       lineFill: 0.12, contourLines: 2, silhouette: 1.2, baseCard: false, swirls: 0,
+      shadedContours: false, coilFillers: false, stripHeight: 0.38, contourSpacing: 0.07, ornaments: 2.5,
       flowers: 0.15, coilTurns: 6, heightVariation: 0.5
+    }
+  }
+];
+
+/** Lighting and board setups. */
+export const LOOKS: Style[] = [
+  {
+    name: 'Studio',
+    description: 'Soft overhead light on a warm grey matte board; strips glow through.',
+    settings: {
+      backgroundColor: [234, 232, 227],
+      planeColor: [224, 222, 217],
+      planeGloss: 0.08,
+      planeRoughness: 0.35,
+      lightDirection: [-0.12, 0.2],
+      lightIntensity: 2.4,
+      lightSoftness: 40,
+      lightColor: [255, 248, 240],
+      fillIntensity: 0.5,
+      skyIntensity: 1.2,
+      translucency: 0.65,
+      paperRoughness: 0.7,
+      exposure: 1.2,
+      contrast: 0.95,
+      vignette: 0.25
+    }
+  },
+  {
+    name: 'Glossy',
+    description: 'Crisp light on a white, varnished board that reflects the paper.',
+    settings: {
+      backgroundColor: [255, 255, 255],
+      planeColor: [255, 255, 255],
+      planeGloss: 1,
+      planeRoughness: 0.12,
+      lightDirection: [-0.3, 0.4],
+      lightIntensity: 3.4,
+      lightSoftness: 20,
+      lightColor: [255, 241, 222],
+      fillIntensity: 0.4,
+      skyIntensity: 0.7,
+      translucency: 0.45,
+      paperRoughness: 0.6,
+      exposure: 1.1,
+      contrast: 1,
+      vignette: 0.15
     }
   }
 ];
@@ -57,6 +108,7 @@ export interface Sample {
 
 /** Bundled cut-paper pictures to start from. */
 export const SAMPLES: Sample[] = [
+  { name: 'Clover', url: './img/samples/clover.svg', settings: { ...STYLES[1].settings, colorNumber: 12 } },
   { name: 'Cat', url: './img/samples/cat.svg', settings: { ...STYLES[0].settings, colorNumber: 8 } },
   // The face reads best as flowing contour lines, like a quilled portrait.
   { name: 'Portrait', url: './img/samples/portrait.svg', settings: { ...STYLES[3].settings, colorNumber: 10 } },
@@ -83,13 +135,17 @@ export interface Config {
   detail: number;
   /** Leave a plain background around the subject as bare board. */
   removeBackground: boolean;
+  /** Blur of region edges in analysis pixels; higher gives smoother, rounder outlines. */
+  edgeSmoothing: number;
   /** Saturation of the paper relative to the image colors. */
   colorBoost: number;
   /** Strips along each region edge, including the outline. */
   contourLines: number;
   contourSpacing: number;
-  /** Regions larger than this share of the subject are filled with contour strips only. */
+  /** Regions larger than this share of the subject are filled with flowing strips only. */
   lineFill: number;
+  /** How far in from the edge flowing strips follow it before running straight, in analysis pixels. */
+  flowSmoothing: number;
   /** Width of the band of cream scrolls around the subject; 0 for none. */
   ornaments: number;
   ornamentColor: RGB;
@@ -105,6 +161,12 @@ export interface Config {
   swirlStrips: number;
   /** Largest swirl radius relative to the largest piece. */
   swirlSize: number;
+  /** Radius ratio between a swirl's turns; lower is a more open, wave-like curl. */
+  swirlTightness: number;
+  /** Outline strips of a region take neighbouring shades, like a bundle of paper. */
+  shadedContours: boolean;
+  /** Fill leftover space with coils only. */
+  coilFillers: boolean;
 
   // Quilled elements
   /** Half length of the largest elements. */
@@ -190,13 +252,15 @@ export function createDefaultConfig(): Config {
     seed: Math.random(),
 
     image: SAMPLES[0].url,
-    colorNumber: 8,
-    detail: 320,
+    colorNumber: 12,
+    detail: 400,
+    edgeSmoothing: 2.5,
     removeBackground: true,
     colorBoost: 1.3,
     contourLines: 0,
     contourSpacing: 0.07,
     lineFill: 1,
+    flowSmoothing: 20,
     ornaments: 2.5,
     ornamentColor: [246, 238, 222],
     silhouette: 0,
@@ -205,6 +269,9 @@ export function createDefaultConfig(): Config {
     swirls: 0,
     swirlStrips: 4,
     swirlSize: 2.2,
+    swirlTightness: 0.45,
+    shadedContours: false,
+    coilFillers: false,
 
     elementSize: 0.9,
     minElementSize: 0.12,
@@ -220,42 +287,45 @@ export function createDefaultConfig(): Config {
     imperfection: 0.5,
     paperVisible: true,
 
-    paperRoughness: 0.6,
+    paperRoughness: 0.7,
     paperTexture: '',
     bumpScale: 0,
-    translucency: 0.45,
+    translucency: 0.65,
     bevel: 0.003,
 
-    backgroundColor: [255, 255, 255],
+    backgroundColor: [234, 232, 227],
     showPlane: true,
-    planeColor: [255, 255, 255],
-    planeGloss: 1,
-    planeRoughness: 0.12,
+    planeColor: [224, 222, 217],
+    planeGloss: 0.08,
+    planeRoughness: 0.35,
     shadowColor: [0, 0, 0],
     shadowIntensity: 0.8,
 
-    lightDirection: [-0.3, 0.4],
-    lightIntensity: 3.4,
-    lightSoftness: 20,
-    lightColor: [255, 241, 222],
-    fillIntensity: 0.4,
-    skyIntensity: 0.7,
+    lightDirection: [-0.12, 0.2],
+    lightIntensity: 2.4,
+    lightSoftness: 40,
+    lightColor: [255, 248, 240],
+    fillIntensity: 0.5,
+    skyIntensity: 1.2,
 
     spinAngle: 0,
     fov: 40,
 
-    exposure: 1.1,
+    exposure: 1.2,
     toneMapping: 'aces',
-    contrast: 1,
+    contrast: 0.95,
     saturation: 1.05,
-    vignette: 0.15,
+    vignette: 0.25,
     bloom: 0,
 
     renderScale: 0.5,
     maxSamples: 16,
     bounces: 4,
     denoise: true,
-    liveDenoise: false
+    liveDenoise: false,
+
+    // Start with the settings that suit the first sample.
+    ...SAMPLES[0].settings
   };
 }
 

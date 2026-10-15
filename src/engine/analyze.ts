@@ -214,20 +214,27 @@ function components(labels: Int16Array, w: number, h: number) {
 
 /**
  * Merges specks into the most common neighbouring paper color: components
- * smaller than `minSize`, and slivers at most two pixels wide, which are the
- * halos left along edges between two colors.
+ * smaller than `minSize`, and slivers at most `2 · sliver` pixels wide, which
+ * are the halos left along edges between two colors.
  */
-function removeSpecks(labels: Int16Array, w: number, h: number, minSize: number) {
+function removeSpecks(labels: Int16Array, w: number, h: number, minSize: number, sliver: number) {
   for (let pass = 0; pass < 3; pass++) {
     const { comp, sizes } = components(labels, w, h);
-    // Pixels whose whole 3×3 neighbourhood shares their component.
+    // Pixels whose whole neighbourhood of radius `sliver` shares their component.
     const interior = new Int32Array(sizes.length);
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const p = y * w + x;
-        const c = comp[p];
-        if (comp[p - 1] === c && comp[p + 1] === c && comp[p - w] === c && comp[p + w] === c
-          && comp[p - w - 1] === c && comp[p - w + 1] === c && comp[p + w - 1] === c && comp[p + w + 1] === c) {
+    for (let y = sliver; y < h - sliver; y++) {
+      for (let x = sliver; x < w - sliver; x++) {
+        const c = comp[y * w + x];
+        let solid = true;
+        for (let dy = -sliver; dy <= sliver && solid; dy++) {
+          for (let dx = -sliver; dx <= sliver; dx++) {
+            if (comp[(y + dy) * w + x + dx] !== c) {
+              solid = false;
+              break;
+            }
+          }
+        }
+        if (solid) {
           interior[c]++;
         }
       }
@@ -362,8 +369,10 @@ export function analyzeImage(image: CanvasImageSource & { width: number; height:
     rgb[i * 3 + 2] = pixels[i * 4 + 2];
     valid[i] = pixels[i * 4 + 3] >= 128 ? 1 : 0;
   }
-  // Paper colors are flat; blur away texture and noise before clustering.
-  boxBlur(rgb, w, h, Math.max(1, Math.round(params.resolution / 160)));
+  // Paper colors are flat; blur away texture and noise before clustering. Keep it
+  // to a pixel: wider blurs turn thin lines into grey plateaus of their own color.
+  // Region edges are smoothed later, on the distance fields.
+  boxBlur(rgb, w, h, 1);
 
   const lab = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
@@ -404,7 +413,7 @@ export function analyzeImage(image: CanvasImageSource & { width: number; height:
   }
   majorityFilter(labels, w, h, k);
   majorityFilter(labels, w, h, k);
-  removeSpecks(labels, w, h, params.minRegion);
+  removeSpecks(labels, w, h, params.minRegion, 1);
 
   // Palette from the mean original color of each final region.
   const sums = new Float64Array(k * 3);

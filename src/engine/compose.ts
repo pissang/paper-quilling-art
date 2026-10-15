@@ -169,6 +169,8 @@ export interface FillOptions {
   height?: number;
   /** Areas already taken, e.g. by swirls, as [x, y, radius]. */
   reserved?: [number, number, number][];
+  /** Color for each single piece, instead of the region's. */
+  pickColor?: () => number;
 }
 
 export interface Composer {
@@ -363,7 +365,7 @@ export function createComposer(params: CompositionParams): Composer {
                 fitted = scale * grow;
               }
               disks.forEach(d => grid.add(d));
-              add(proto, x, y, rotation, fitted, pieceHeight(), color);
+              add(proto, x, y, rotation, fitted, pieceHeight(), options.pickColor ? options.pickColor() : color);
               break placing;
             }
           }

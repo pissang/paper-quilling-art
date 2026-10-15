@@ -72,6 +72,63 @@ export function distanceTransform(inside: Uint8Array, w: number, h: number, edge
   return out;
 }
 
+/** Separable Gaussian blur of a scalar field, clamping at the borders. */
+export function blurField(field: Float32Array, w: number, h: number, sigma: number): Float32Array {
+  if (sigma <= 0) {
+    return field;
+  }
+  const radius = Math.ceil(sigma * 2.5);
+  const kernel = new Float32Array(radius * 2 + 1);
+  let sum = 0;
+  for (let i = -radius; i <= radius; i++) {
+    sum += kernel[i + radius] = Math.exp(-(i * i) / (2 * sigma * sigma));
+  }
+  kernel.forEach((v, i) => {
+    kernel[i] = v / sum;
+  });
+  const tmp = new Float32Array(field.length);
+  const out = new Float32Array(field.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      for (let k = -radius; k <= radius; k++) {
+        v += field[y * w + Math.min(w - 1, Math.max(0, x + k))] * kernel[k + radius];
+      }
+      tmp[y * w + x] = v;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      for (let k = -radius; k <= radius; k++) {
+        v += tmp[Math.min(h - 1, Math.max(0, y + k)) * w + x] * kernel[k + radius];
+      }
+      out[y * w + x] = v;
+    }
+  }
+  return out;
+}
+
+/**
+ * Signed distance in pixels, positive inside (half a pixel more than the
+ * distance to the edge) and negative outside, blurred by `sigma` pixels.
+ * Blurring takes out the waviness a pixel-sized label map leaves in its
+ * edges, so traced strips and their parallel echoes run smoothly.
+ */
+export function smoothSignedDistance(inside: Uint8Array, w: number, h: number, sigma: number): Float32Array {
+  const outsideMask = new Uint8Array(inside.length);
+  for (let i = 0; i < inside.length; i++) {
+    outsideMask[i] = inside[i] ? 0 : 1;
+  }
+  const din = distanceTransform(inside, w, h);
+  const dout = distanceTransform(outsideMask, w, h, true);
+  const signed = new Float32Array(inside.length);
+  for (let i = 0; i < signed.length; i++) {
+    signed[i] = din[i] - dout[i];
+  }
+  return blurField(signed, w, h, sigma);
+}
+
 /** 4-connected components of a mask: component id per pixel (-1 outside) and sizes. */
 export function maskComponents(inside: Uint8Array, w: number, h: number) {
   const comp = new Int32Array(inside.length).fill(-1);

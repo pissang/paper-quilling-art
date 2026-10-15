@@ -74,10 +74,14 @@ export function DesignPanel() {
       <Section title="Swirls" icon={<IconTornado size={15} />}>
         <SliderField name="swirls" label="Amount" min={0} max={1} step={0.05}
           hint="Share of each color region given to big open swirls of several strips. 0 turns them off." />
-        <SliderField name="swirlStrips" label="Strips" min={1} max={6} step={1}
+        <SliderField name="swirlStrips" label="Strips" min={1} max={10} step={1}
           hint="Strips rolled together in each swirl, shaded from the region's color and its neighbours." />
         <SliderField name="swirlSize" label="Size" min={1} max={4} step={0.1}
           hint="Largest swirl radius relative to the largest piece." />
+        <SliderField name="swirlTightness" label="Curl" min={0.25} max={0.75} step={0.01}
+          hint="How much each turn of a swirl shrinks. Lower values give open, wave-like curls with an off-centre eye." />
+        <SwitchField name="coilFillers" label="Coils between"
+          hint="Fill the space left between swirls with small coils only, no teardrops, leaves or flowers." />
       </Section>
 
       <Section title="Base card" icon={<IconLayersSubtract size={15} />}>
@@ -91,8 +95,12 @@ export function DesignPanel() {
         <SliderField name="contourLines" label="Outline strips" min={0} max={20} step={1}
           hint="Strips running along the edge of every color region, including its outline. High values fill regions with contour lines." />
         <SliderField name="contourSpacing" label="Spacing" min={0.03} max={0.3} step={0.005} />
+        <SwitchField name="shadedContours" label="Shaded bundle"
+          hint="Outline strips take the region's color and its nearest shades, dark to light." />
         <SliderField name="lineFill" label="Line fill" min={0.01} max={1} step={0.01}
-          hint="Regions larger than this share of the subject, like a face, are filled entirely with contour strips. 1 turns it off." />
+          hint="Regions larger than this share of the subject, like a face, are filled with flowing strips instead of pieces. 1 turns it off." />
+        <SliderField name="flowSmoothing" label="Edge follow" min={2} max={60} step={1}
+          hint="How far in from the edge the flowing strips bend with it. Further in they run straight along the region's long axis." />
       </Section>
 
       <Section title="Cream paper" icon={<IconSpiral size={15} />}>

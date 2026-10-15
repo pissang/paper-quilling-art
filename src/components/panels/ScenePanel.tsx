@@ -1,8 +1,8 @@
 import { useRef } from 'react';
-import { Group, Stack } from '@mantine/core';
-import { IconBulb, IconLayoutBoard, IconTexture } from '@tabler/icons-react';
-import { PAPER_TEXTURES, rgbToHex } from '../../config';
-import { setConfig, useConfigValue } from '../../store';
+import { Button, Group, SimpleGrid, Stack, Tooltip } from '@mantine/core';
+import { IconBulb, IconLayoutBoard, IconSun, IconTexture } from '@tabler/icons-react';
+import { LOOKS, PAPER_TEXTURES, rgbToHex, type Config } from '../../config';
+import { setConfig, useConfig, useConfigValue } from '../../store';
 import { ColorButton, ColorField, Note, Section, SelectField, SliderField, SwitchField } from '../fields';
 
 const PAD_RANGE = 1;
@@ -64,10 +64,31 @@ function KeyLightInfo() {
   );
 }
 
+function LookPicker() {
+  // A look is active while all of its settings are unchanged.
+  const active = useConfig(state => LOOKS.findIndex(look =>
+    (Object.keys(look.settings) as (keyof Config)[]).every(key =>
+      JSON.stringify(state.config[key]) === JSON.stringify(look.settings[key]))));
+  return (
+    <SimpleGrid cols={2} spacing={6}>
+      {LOOKS.map((look, idx) => (
+        <Tooltip key={look.name} label={look.description} multiline w={220}>
+          <Button size="xs" variant={idx === active ? 'filled' : 'light'} onClick={() => setConfig(look.settings)}>
+            {look.name}
+          </Button>
+        </Tooltip>
+      ))}
+    </SimpleGrid>
+  );
+}
+
 export function ScenePanel() {
   const showPlane = useConfigValue('showPlane');
   return (
     <Stack gap={12}>
+      <Section title="Look" icon={<IconSun size={15} />}>
+        <LookPicker />
+      </Section>
       <Section title="Light" icon={<IconBulb size={15} />}>
         <Group gap={14} wrap="nowrap" align="flex-start" mb={4}>
           <DirectionPad />

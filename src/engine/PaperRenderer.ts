@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Engine, Render, RenderLoop, THREESync, type DenoiserOptions } from '@meimu/mutracer';
 import { MAX_COLORS, type Config, type RGB } from '../config';
 import { useConfig, useRenderInfo, type RenderPhase } from '../store';
-import { BOX_SIZE, ORNAMENT_COLOR, analyzeSource, buildArtwork, type Artwork } from './generate';
+import { BOX_SIZE, ORNAMENT_COLOR, PAPER_SLOTS, TINTS, analyzeSource, buildArtwork, type Artwork } from './generate';
 import type { Analysis } from './analyze';
 import type { Element } from './compose';
 import { applyHeight, type StripLayout } from './stripGeometry';
@@ -25,15 +25,14 @@ const ANALYSIS_KEYS: Keys = ['image', 'colorNumber', 'detail', 'removeBackground
 const BUILD_KEYS: Keys = [
   'seed', 'elementSize', 'minElementSize', 'gap', 'flowers', 'thickness', 'imperfection',
   'coilTurns', 'coilEccentricity', 'tipPull', 'heightJitter',
-  'contourLines', 'contourSpacing', 'lineFill', 'ornaments', 'baseCard', 'swirls', 'swirlStrips', 'swirlSize'
+  'contourLines', 'contourSpacing', 'lineFill', 'ornaments', 'baseCard', 'swirls', 'swirlStrips', 'swirlSize', 'swirlTightness', 'flowSmoothing',
+  'edgeSmoothing', 'shadedContours', 'coilFillers'
 ];
 const HEIGHT_KEYS: Keys = ['stripHeight', 'silhouette'];
 const VARIATION_KEYS: Keys = ['heightVariation'];
 const MATERIAL_KEYS: Keys = [
   'paperRoughness', 'paperTexture', 'bumpScale', 'translucency', 'bevel', 'colorBoost', 'ornamentColor', 'cardTone'
 ];
-/** Image colors plus the ornament paper. */
-const PAPER_SLOTS = MAX_COLORS + 1;
 const VISIBILITY_KEYS: Keys = ['paperVisible', 'silhouette'];
 const GROUND_KEYS: Keys = ['showPlane', 'planeColor', 'planeGloss', 'planeRoughness', 'shadowColor', 'shadowIntensity', 'backgroundColor'];
 const LIGHT_KEYS: Keys = ['lightDirection', 'lightIntensity', 'lightSoftness', 'lightColor', 'fillIntensity', 'skyIntensity'];
@@ -332,9 +331,14 @@ export class PaperRenderer {
         lineFill: config.lineFill,
         ornaments: config.ornaments,
         baseCard: config.baseCard,
+        edgeSmoothing: config.edgeSmoothing,
+        shadedContours: config.shadedContours,
+        coilFillers: config.coilFillers,
         swirls: config.swirls,
         swirlStrips: config.swirlStrips,
         swirlSize: config.swirlSize,
+        swirlTightness: config.swirlTightness,
+        flowSmoothing: config.flowSmoothing,
         // Always built; a zero height hides it without a rebuild.
         silhouette: true
       });
@@ -407,7 +411,7 @@ export class PaperRenderer {
     artwork.contours.forEach((layout, color) => {
       if (layout) {
         const mesh = new THREE.Mesh(this.layoutGeometry(layout), this.paperMaterials[color]);
-        mesh.userData.level = artwork.levels[color];
+        mesh.userData.level = artwork.levels[color % MAX_COLORS];
         this.contourMeshes.push(mesh);
         this.paperGroup.add(mesh);
         triangleCount += layout.indices.length / 3;
@@ -522,13 +526,16 @@ export class PaperRenderer {
         return;
       }
       // Colored paper is usually more saturated than a photo of the subject.
-      const [r, g, b] = palette[idx] ?? [200, 200, 200];
+      const base = idx % MAX_COLORS;
+      const tint = TINTS[Math.floor(idx / MAX_COLORS)];
+      const [r, g, b] = palette[base] ?? [200, 200, 200];
       const color = new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
       color.getHSL(hsl, THREE.SRGBColorSpace);
       color.setHSL(hsl.h, Math.min(1, hsl.s * config.colorBoost), hsl.l, THREE.SRGBColorSpace);
       const srgb = { r: 0, g: 0, b: 0 };
       color.getRGB(srgb, THREE.SRGBColorSpace);
-      const paper: RGB = [srgb.r * 255, srgb.g * 255, srgb.b * 255];
+      // Pale stock of the same hue, mixed towards white.
+      const paper = [srgb.r, srgb.g, srgb.b].map(v => (v + (1 - v) * tint) * 255) as RGB;
       setup(material, paper, PAPER_UV_SCALE);
       if (idx < MAX_COLORS) {
         // The base card is a darker or lighter stock of the same hue.

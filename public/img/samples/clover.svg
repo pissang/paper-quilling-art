@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 600" width="600" height="600">
+  <!-- A three-leaf clover of hearts, each leaf in broad jewel-toned areas made for swirls. -->
+  <defs>
+    <path id="heart" d="M 0 0 C -18 -26 -104 -70 -96 -140 C -88 -194 -18 -198 0 -150 C 18 -198 88 -194 96 -140 C 104 -70 18 -26 0 0 Z" />
+    <clipPath id="clip-top"><use xlink:href="#heart" transform="translate(300 300) scale(1.05)" /></clipPath>
+    <clipPath id="clip-right"><use xlink:href="#heart" transform="translate(300 300) rotate(120) scale(1.05)" /></clipPath>
+    <clipPath id="clip-left"><use xlink:href="#heart" transform="translate(300 300) rotate(240) scale(1.05)" /></clipPath>
+  </defs>
+  <rect width="600" height="600" fill="#eceae5" />
+
+  <!-- Stem -->
+  <path d="M 300 310 C 320 380 360 440 420 520" fill="none" stroke="#3f7d5a" stroke-width="16" stroke-linecap="round" />
+
+  <!-- Top leaf: violet with teal and magenta -->
+  <g clip-path="url(#clip-top)">
+    <rect width="600" height="600" fill="#6b3f9e" />
+    <circle cx="246" cy="148" r="62" fill="#2f9aa0" />
+    <circle cx="352" cy="150" r="58" fill="#c23d7a" />
+    <circle cx="300" cy="236" r="40" fill="#f2c0d6" />
+  </g>
+
+  <!-- Right leaf: orange with yellow and cream -->
+  <g clip-path="url(#clip-right)">
+    <rect width="600" height="600" fill="#ee8a3a" />
+    <circle cx="452" cy="330" r="60" fill="#f4c34f" />
+    <circle cx="400" cy="420" r="58" fill="#f6e2c2" />
+    <circle cx="370" cy="330" r="34" fill="#c23d7a" />
+  </g>
+
+  <!-- Left leaf: teal with mint and blue -->
+  <g clip-path="url(#clip-left)">
+    <rect width="600" height="600" fill="#2a8f8a" />
+    <circle cx="150" cy="330" r="60" fill="#8fd3b6" />
+    <circle cx="204" cy="420" r="58" fill="#3d6fb5" />
+    <circle cx="232" cy="330" r="34" fill="#6b3f9e" />
+  </g>
+</svg>
