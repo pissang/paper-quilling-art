@@ -2,9 +2,10 @@ import { useRef, useState } from 'react';
 import { Button, Group, Modal, NumberInput, Progress, SegmentedControl, Stack, Text } from '@mantine/core';
 import { IconCamera, IconDownload, IconSparkles } from '@tabler/icons-react';
 import { useRenderer } from '../RendererContext';
-import { useRenderInfo, type RenderPhase } from '../store';
+import { useRenderMode, useRenderInfo, type RenderPhase } from '../store';
 
 const PHASE_LABEL: Record<RenderPhase, string> = {
+  realtime: 'Real-time',
   preparing: 'Preparing',
   compiling: 'Compiling shaders',
   previewing: 'Preview',
@@ -15,6 +16,7 @@ const PHASE_LABEL: Record<RenderPhase, string> = {
 };
 
 const PHASE_COLOR: Record<RenderPhase, string> = {
+  realtime: 'var(--mantine-color-green-5)',
   preparing: 'var(--mantine-color-dark-2)',
   compiling: 'var(--mantine-color-dark-2)',
   previewing: 'var(--mantine-color-blue-4)',
@@ -112,11 +114,12 @@ function ExportModal({ opened, onClose }: { opened: boolean; onClose: () => void
 
 export function RenderFooter() {
   const renderer = useRenderer();
-  const { phase, samples, maxSamples, backend, generating, error } = useRenderInfo();
+  const tracing = useRenderMode(s => s.mode === 'pathtracing');
+  const { phase, samples, maxSamples, backend, generating, error, offline } = useRenderInfo();
   const [exportOpened, setExportOpened] = useState(false);
 
   const progress = phase === 'finished' ? 100 : Math.min(samples / maxSamples * 100, 100);
-  const ready = !!renderer && !generating && phase !== 'preparing' && phase !== 'compiling' && phase !== 'error';
+  const ready = !!renderer && !generating && !offline && phase !== 'preparing' && phase !== 'compiling' && phase !== 'error';
   const label = generating ? 'Building strips' : PHASE_LABEL[phase];
 
   const color = generating ? 'var(--mantine-color-yellow-4)' : PHASE_COLOR[phase];
@@ -128,13 +131,13 @@ export function RenderFooter() {
         <span className="status-dot" data-busy={busy || undefined} style={{ background: color, color }} />
         <span className="status-label">{label}</span>
         {backend && <span className="status-chip">{backend === 'webgpu' ? 'WebGPU' : 'WebGL 2'}</span>}
-        <span className="status-samples">
+        {tracing && <span className="status-samples">
           <b>{samples}</b> / {maxSamples} spp
-        </span>
+        </span>}
       </div>
-      <div className="status-progress">
+      {tracing && <div className="status-progress">
         <div style={{ width: `${progress}%`, background: color }} />
-      </div>
+      </div>}
       {phase === 'error' && error && <Text size="xs" c="red" lineClamp={3} mt={8}>{error}</Text>}
       <Group grow gap={8} mt={12}>
         <Button variant="default" leftSection={<IconCamera size={16} />} disabled={!ready}

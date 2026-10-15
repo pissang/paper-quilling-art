@@ -37,6 +37,8 @@ body {
   transition: background-color 250ms;
 }
 
+.viewport-trace-canvas { pointer-events: none; }
+
 .viewport-canvas {
   position: absolute;
   inset: 0;
@@ -57,6 +59,7 @@ body {
 }
 
 .overlay-top-left { top: 16px; left: 16px; }
+.overlay-top-right { top: 16px; right: 16px; }
 .overlay-bottom-left { bottom: 16px; left: 16px; }
 .overlay-bottom-right { bottom: 16px; right: 16px; }
 

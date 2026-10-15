@@ -115,7 +115,15 @@ export function setConfig(patch: Partial<Config>) {
   useConfig.getState().set(patch);
 }
 
-export type RenderPhase = 'preparing' | 'compiling' | 'previewing' | 'converging' | 'denoising' | 'finished' | 'error';
+export type RenderMode = 'three' | 'pathtracing';
+
+/** Rendering preference is session-only: every visit starts with Three.js. */
+export const useRenderMode = create<{ mode: RenderMode; setMode: (mode: RenderMode) => void }>(set => ({
+  mode: 'three',
+  setMode: mode => set({ mode })
+}));
+
+export type RenderPhase = 'realtime' | 'preparing' | 'compiling' | 'previewing' | 'converging' | 'denoising' | 'finished' | 'error';
 
 export interface RenderInfo {
   phase: RenderPhase;

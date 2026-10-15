@@ -1,13 +1,13 @@
 # Paper Quilling Art
 
-Generate paper quilling artwork from a Perlin flow field and path trace it in the browser.
+Generate paper quilling artwork from images and render it in the browser.
 
 ![](./screenshot/shot-1.jpg)
 
 ![](./screenshot/shot-2.jpg)
 
 - Scene is built and managed with [three.js](https://threejs.org/).
-- Rendering is done by [MuTracer](https://github.com/pissang/mutracer), a progressive WebGPU path tracer (WebGL 2 fallback) with OIDN denoising. `THREESync` keeps the three.js scene and the path tracer in sync.
+- The viewport defaults to Three.js real-time rendering. Use the **Three.js / Path tracing** segmented control to switch to [MuTracer](https://github.com/pissang/mutracer), a progressive WebGPU path tracer (WebGL 2 fallback) with OIDN denoising. `THREESync` keeps the three.js scene and the path tracer in sync.
 - UI is built with React and [Mantine](https://mantine.dev/).
 
 ## Development
@@ -31,4 +31,4 @@ The static site is written to `dist/`.
 
 - Left drag: orbit, scroll: zoom, right drag: spin the artwork.
 - `⌘Z` / `⇧⌘Z`: undo / redo.
-- **Snapshot** saves the current viewport image. **Render HQ** path traces a fixed size image offline at up to 4× the viewport resolution.
+- **Snapshot** saves the current view using the selected renderer. **Render HQ** path traces a fixed size image offline at up to 4× the viewport resolution.

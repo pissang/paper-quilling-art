@@ -1,11 +1,12 @@
 import { Button, Group, Stack } from '@mantine/core';
 import { IconAperture, IconCamera, IconFocusCentered, IconRotate2, IconSparkles } from '@tabler/icons-react';
 import { useRenderer } from '../../RendererContext';
-import { setConfig, useConfigValue } from '../../store';
+import { setConfig, useConfigValue, useRenderMode } from '../../store';
 import { Note, Section, SelectField, SliderField, SwitchField } from '../fields';
 
 export function RenderPanel() {
   const renderer = useRenderer();
+  const tracing = useRenderMode(s => s.mode === 'pathtracing');
   const denoise = useConfigValue('denoise');
   return (
     <Stack gap={12}>
@@ -44,7 +45,7 @@ export function RenderPanel() {
         <SliderField name="bloom" label="Bloom" min={0} max={1} step={0.01} />
       </Section>
 
-      <Section title="Path tracing" icon={<IconSparkles size={15} />}>
+      {tracing && <Section title="Path tracing" icon={<IconSparkles size={15} />}>
         <SliderField name="renderScale" label="Viewport resolution" min={0.25} max={1} step={0.05}
           format={v => `${Math.round(v * 100)}%`}
           hint="Resolution the viewport traces at. Snapshots and exports always render at full resolution." />
@@ -58,7 +59,7 @@ export function RenderPanel() {
             hint="Denoise progressively while the image converges, and every preview frame while you interact (small OIDN network)." />
         )}
         <Note>Add <code>?webgl</code> to the URL to force the WebGL 2 backend.</Note>
-      </Section>
+      </Section>}
     </Stack>
   );
 }

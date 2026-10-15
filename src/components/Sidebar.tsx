@@ -63,7 +63,7 @@ export function Sidebar() {
           <Logo />
           <div>
             <div className="app-title">Paper Quilling</div>
-            <div className="app-subtitle">Path traced in your browser</div>
+            <div className="app-subtitle">Paper art in your browser</div>
           </div>
         </Group>
         <History />

@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { Engine, Render, RenderLoop, THREESync, type DenoiserOptions } from '@meimu/mutracer';
 import { MAX_COLORS, type Config, type RGB } from '../config';
-import { useConfig, useRenderInfo, type RenderPhase } from '../store';
+import { useConfig, useRenderInfo, useRenderMode, type RenderPhase } from '../store';
 import { BOX_SIZE, ORNAMENT_COLOR, PAPER_SLOTS, TINTS, analyzeSource, buildArtwork, type Artwork } from './generate';
 import type { Analysis } from './analyze';
 import type { Element } from './compose';
@@ -66,9 +71,21 @@ export interface ExportOptions {
 
 export class PaperRenderer {
   readonly canvas: HTMLCanvasElement;
-  private engine: Engine;
-  private loop: RenderLoop;
-  private sync: THREESync;
+  private engine?: Engine;
+  private loop?: RenderLoop;
+  private sync?: THREESync;
+  private tracerReady?: Promise<void>;
+  private traceCanvas?: HTMLCanvasElement;
+  private raster: THREE.WebGLRenderer;
+  private composer: EffectComposer;
+  private bloomPass: UnrealBloomPass;
+  private lookPass: ShaderPass;
+  private exporting = false;
+  private rasterLights = new THREE.Group();
+  private rasterKey = new THREE.DirectionalLight();
+  private rasterFill = new THREE.HemisphereLight();
+  private rasterSky = new THREE.DirectionalLight();
+  private shadowGround: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial>;
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private controls: OrbitControls;
@@ -85,7 +102,7 @@ export class PaperRenderer {
   private cardMeshes: THREE.Mesh[] = [];
   private cardMaterials: THREE.MeshStandardMaterial[] = [];
   private ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshPhysicalMaterial>;
-  // Analytic area lights only: no environment map or ambient term.
+  // Analytic area lights for path tracing.
   private keyLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
   private fillLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
   private skyLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
@@ -109,6 +126,9 @@ export class PaperRenderer {
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'viewport-canvas';
     container.appendChild(this.canvas);
+    this.raster = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
+    this.raster.shadowMap.enabled = true;
+    this.raster.shadowMap.type = THREE.PCFShadowMap;
 
     // Scene ----------------------------------------------------------------
     this.content.rotation.x = -Math.PI / 2;
@@ -128,7 +148,22 @@ export class PaperRenderer {
       // Matte paper under a clear coat, like a varnished or laminated board.
       new THREE.MeshPhysicalMaterial({ roughness: 0.9 })
     );
+    this.ground.receiveShadow = true;
     this.content.add(this.ground);
+    this.shadowGround = new THREE.Mesh(this.ground.geometry, new THREE.ShadowMaterial());
+    this.shadowGround.scale.setScalar(4);
+    this.shadowGround.receiveShadow = true;
+    this.content.add(this.shadowGround);
+
+    this.rasterKey.castShadow = true;
+    this.rasterKey.shadow.mapSize.set(2048, 2048);
+    const shadowCamera = this.rasterKey.shadow.camera;
+    shadowCamera.left = shadowCamera.bottom = -BOX_SIZE * 1.5;
+    shadowCamera.right = shadowCamera.top = BOX_SIZE * 1.5;
+    shadowCamera.far = LIGHT_DISTANCE * 2;
+    this.rasterKey.shadow.normalBias = 0.015;
+    this.rasterLights.add(this.rasterKey, this.rasterFill, this.rasterSky);
+    this.scene.add(this.rasterLights);
 
     this.scene.add(this.keyLight, this.fillLight, this.skyLight);
 
@@ -144,20 +179,38 @@ export class PaperRenderer {
     this.controls.maxDistance = 120;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
-    // MuTracer -------------------------------------------------------------
-    const backend = new URLSearchParams(location.search).has('webgl') ? 'webgl' : 'auto';
-    this.engine = new Engine({ canvas: this.canvas, backend });
-    this.sync = new THREESync(this.engine, {
-      scene: this.scene,
-      camera: this.camera,
-      controls: this.controls
+    const previewTarget = new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.HalfFloatType,
+      samples: Math.min(4, this.raster.capabilities.maxSamples)
     });
-    this.loop = new RenderLoop(this.engine, {
-      sync: this.sync,
-      final: { maxSamples: 512, bounces: 5 }
+    this.composer = new EffectComposer(this.raster, previewTarget);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0, 0.4, 0.9);
+    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(new OutputPass());
+    this.lookPass = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null },
+        contrast: { value: 1 },
+        saturation: { value: 1 },
+        vignette: { value: 0 }
+      },
+      vertexShader: `varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform sampler2D tDiffuse;
+        uniform float contrast, saturation, vignette;
+        varying vec2 vUv;
+        void main() {
+          vec4 pixel = texture2D(tDiffuse, vUv);
+          float luminance = dot(pixel.rgb, vec3(0.2126, 0.7152, 0.0722));
+          vec3 color = mix(vec3(luminance), pixel.rgb, saturation);
+          color = (color - 0.5) * contrast + 0.5;
+          vec2 edge = (vUv - 0.5) * 2.0;
+          color *= 1.0 - vignette * smoothstep(0.25, 1.4, length(edge));
+          gl_FragColor = vec4(color, pixel.a);
+        }`
     });
-
-    this.bindStatus();
+    this.composer.addPass(this.lookPass);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -169,33 +222,91 @@ export class PaperRenderer {
     this.applyConfig(useConfig.getState().config);
     this.unsubscribers.push(useConfig.subscribe(state => this.applyConfig(state.config)));
 
-    this.loop.start();
+    this.unsubscribers.push(useRenderMode.subscribe(() => { void this.updateMode(); }));
+    void this.updateMode();
+  }
+
+  private isTracing() {
+    return useRenderMode.getState().mode === 'pathtracing';
+  }
+
+  /** Keep one camera and scene while each backend owns its own canvas/context. */
+  private async updateMode() {
+    this.loop?.stop();
+    this.raster.setAnimationLoop(null);
+    const tracing = this.isTracing();
+    // The transparent Three.js canvas remains the pointer surface in both modes.
+    this.canvas.style.opacity = tracing ? '0' : '1';
+    if (this.traceCanvas) this.traceCanvas.style.visibility = tracing ? 'visible' : 'hidden';
+    this.updateLight();
+    this.updateGround();
+    if (!tracing) {
+      useRenderInfo.setState({ phase: 'realtime', samples: 0, backend: 'webgl', error: undefined });
+      this.raster.setAnimationLoop(() => {
+        if (!this.exporting && !document.hidden) {
+          this.controls.update();
+          this.composer.render();
+        }
+      });
+      return;
+    }
+    useRenderInfo.setState({ phase: 'preparing', samples: 0, backend: '', error: undefined });
+    try {
+      await this.ensureTracer();
+      if (this.disposed || !this.isTracing() || this.exporting) return;
+      useRenderInfo.setState({
+        phase: this.loop!.status as RenderPhase,
+        samples: this.loop!.samples,
+        backend: this.engine!.info?.backend ?? '',
+        adapter: this.engine!.info?.adapterName ?? ''
+      });
+      this.loop!.start();
+    }
+    catch (error) {
+      if (!this.disposed && this.isTracing()) {
+        useRenderInfo.setState({ phase: 'error', error: String((error as Error)?.message ?? error) });
+      }
+    }
+  }
+
+  private ensureTracer() {
+    if (!this.tracerReady) {
+      this.traceCanvas = document.createElement('canvas');
+      this.traceCanvas.className = 'viewport-canvas viewport-trace-canvas';
+      this.traceCanvas.style.visibility = this.isTracing() ? 'visible' : 'hidden';
+      this.container.appendChild(this.traceCanvas);
+      const backend = new URLSearchParams(location.search).has('webgl') ? 'webgl' : 'auto';
+      const engine = this.engine = new Engine({ canvas: this.traceCanvas, backend });
+      this.sync = new THREESync(engine, { scene: this.scene, camera: this.camera, controls: this.controls });
+      this.loop = new RenderLoop(engine, { sync: this.sync, final: { maxSamples: 512, bounces: 5 } });
+      this.bindStatus();
+      this.resize();
+      this.updateDisplay();
+      this.updateGround();
+      this.updateRenderSettings();
+      this.tracerReady = engine.init().then(() => {
+        if (!this.disposed) this.updateDenoiser();
+      });
+    }
+    return this.tracerReady;
   }
 
   private bindStatus() {
     const info = useRenderInfo;
+    const loop = this.loop!;
+    const engine = this.engine!;
     this.unsubscribers.push(
-      this.loop.on('status', ({ status }) => {
-        info.setState({ phase: status as RenderPhase, samples: this.loop.samples });
+      loop.on('status', ({ status }) => {
+        if (this.isTracing() && !this.disposed) info.setState({ phase: status as RenderPhase, samples: loop.samples });
       }),
-      this.loop.on('sample', ({ samples }) => {
-        info.setState({ samples });
+      loop.on('sample', ({ samples }) => {
+        if (this.isTracing() && !this.disposed) info.setState({ samples });
       }),
-      this.engine.on('error', error => {
+      engine.on('error', error => {
         console.error(error);
-        info.setState({ phase: 'error', error: error.message });
+        if (this.isTracing() && !this.disposed) info.setState({ phase: 'error', error: error.message });
       })
     );
-    this.engine.init().then(() => {
-      const engineInfo = this.engine.info;
-      info.setState({
-        backend: engineInfo?.backend ?? this.engine.backend ?? '',
-        adapter: engineInfo?.adapterName ?? ''
-      });
-      this.updateDenoiser();
-    }).catch(error => {
-      info.setState({ phase: 'error', error: String(error?.message ?? error) });
-    });
   }
 
   private resize() {
@@ -208,7 +319,9 @@ export class PaperRenderer {
     this.fullSize = { width: Math.round(width * ratio), height: Math.round(height * ratio) };
     // The viewport traces at a fraction of the screen resolution; exports use the full size.
     const scale = this.config?.renderScale ?? 1;
-    this.engine.display.setSize(
+    this.raster.setSize(this.fullSize.width, this.fullSize.height, false);
+    this.composer.setSize(this.fullSize.width, this.fullSize.height);
+    this.engine?.display.setSize(
       Math.max(1, Math.round(this.fullSize.width * scale)),
       Math.max(1, Math.round(this.fullSize.height * scale))
     );
@@ -437,6 +550,12 @@ export class PaperRenderer {
       this.paperGroup.add(mesh);
       triangleCount += artwork.silhouette.indices.length / 3;
     }
+    this.paperGroup.traverse(object => {
+      if (object instanceof THREE.Mesh) {
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
     useRenderInfo.setState({ paperCount: artwork.elements.length, triangleCount });
     this.updateVisibility();
   }
@@ -456,6 +575,7 @@ export class PaperRenderer {
         mesh.setMatrixAt(i, matrix.compose(position, rotation, scale));
       });
       mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
     }
     // Contour strips follow their region's height level.
     for (const mesh of this.contourMeshes) {
@@ -472,7 +592,9 @@ export class PaperRenderer {
       const relative: (() => number) | undefined = geometry.userData.relative;
       applyHeight(geometry.userData.layout, height * (relative ? relative() : 1), attr.array as Float32Array);
       attr.needsUpdate = true;
+      geometry.computeBoundingSphere();
     }
+    for (const { mesh } of this.batches) mesh.computeBoundingSphere();
   }
 
   private updateVisibility() {
@@ -566,7 +688,13 @@ export class PaperRenderer {
     // The catcher covers the whole frame so shadows are never clipped.
     this.ground.scale.setScalar(config.showPlane ? 1 : 4);
 
-    Object.assign(this.engine.display, {
+    const tracing = this.isTracing() || this.exporting;
+    this.ground.visible = tracing || config.showPlane;
+    this.shadowGround.visible = !tracing && !config.showPlane;
+    setColor(this.shadowGround.material.color, config.shadowColor);
+    this.shadowGround.material.opacity = config.shadowIntensity;
+    this.rasterKey.shadow.intensity = config.shadowIntensity;
+    if (this.engine) Object.assign(this.engine.display, {
       shadowCatcherColor: srgbToLinear(config.shadowColor),
       shadowCatcherAlpha: config.shadowIntensity
     });
@@ -610,11 +738,41 @@ export class PaperRenderer {
 
     // A broad overhead panel stands in for skylight; nudged off the pole so lookAt stays stable.
     this.placeLight(this.skyLight, new THREE.Vector3(0.001, 1, 0.001), SKY_ANGLE, config.skyIntensity, SKY_COLOR);
+
+    const tracing = this.isTracing() || this.exporting;
+    this.keyLight.visible &&= tracing;
+    this.fillLight.visible &&= tracing;
+    this.skyLight.visible &&= tracing;
+    this.rasterLights.visible = !tracing;
+    this.rasterKey.position.copy(this.keyLight.position);
+    this.rasterKey.color.copy(this.keyLight.color);
+    this.rasterKey.intensity = config.lightIntensity;
+    this.rasterKey.shadow.radius = Math.max(1, config.lightSoftness / 8);
+    setColor(this.rasterFill.color, FILL_COLOR);
+    this.rasterFill.groundColor.setRGB(0.18, 0.16, 0.14);
+    this.rasterFill.intensity = config.fillIntensity;
+    this.rasterSky.position.copy(this.skyLight.position);
+    setColor(this.rasterSky.color, SKY_COLOR);
+    this.rasterSky.intensity = config.skyIntensity;
   }
 
   private updateDisplay() {
     const config = this.config!;
-    Object.assign(this.engine.display, {
+    const toneMapping = {
+      agx: THREE.AgXToneMapping,
+      aces: THREE.ACESFilmicToneMapping,
+      cineon: THREE.CineonToneMapping,
+      reinhard: THREE.ReinhardToneMapping,
+      linear: THREE.LinearToneMapping
+    };
+    this.raster.toneMapping = toneMapping[config.toneMapping];
+    this.raster.toneMappingExposure = config.exposure;
+    this.lookPass.uniforms.contrast.value = config.contrast;
+    this.lookPass.uniforms.saturation.value = config.saturation;
+    this.lookPass.uniforms.vignette.value = config.vignette;
+    this.bloomPass.strength = config.bloom;
+    this.bloomPass.enabled = config.bloom > 0;
+    if (this.engine) Object.assign(this.engine.display, {
       toneMapping: config.toneMapping,
       toneMappingExposure: config.exposure,
       contrast: config.contrast,
@@ -626,7 +784,7 @@ export class PaperRenderer {
 
   private updateRenderSettings() {
     const config = this.config!;
-    Object.assign(this.loop.final, {
+    if (this.loop) Object.assign(this.loop.final, {
       maxSamples: config.maxSamples,
       bounces: config.bounces
     });
@@ -647,14 +805,14 @@ export class PaperRenderer {
     const schedule = target === 'preview' ? 'every-sample'
       : target === 'final' && liveDenoise ? 'progressive'
         : 'converged';
-    return this.engine.backend === 'webgpu'
+    return this.engine?.backend === 'webgpu'
       ? { type: 'oidn', model: target === 'preview' ? 'small' : 'standard', schedule }
       : { type: 'jnlm', schedule };
   }
 
   private updateDenoiser() {
     // The backend is only known after initialisation.
-    if (!this.engine.info) {
+    if (!this.engine?.info || !this.loop || this.disposed) {
       return;
     }
     const { final, preview } = this.loop;
@@ -693,29 +851,44 @@ export class PaperRenderer {
 
   /** The current view at full resolution, with the viewport's sample count. */
   async snapshot() {
-    return this.renderImage({ ...this.fullSize, samples: this.config!.maxSamples });
+    if (this.isTracing()) {
+      return this.renderImage({ ...this.fullSize, samples: this.config!.maxSamples });
+    }
+    this.composer.render();
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      this.canvas.toBlob(value => value ? resolve(value) : reject(new Error('Failed to encode PNG')), 'image/png');
+    });
+    return this.composite(blob);
   }
 
   /** Renders a fixed size image offline with the current camera. */
   async renderImage({ width, height, samples, signal }: ExportOptions) {
-    const config = this.config!;
-    const render = new Render(this.engine, {
-      width,
-      height,
-      bounces: config.bounces,
-      maxSamples: samples
-    });
-    const denoiser = this.denoiserOptions('export');
-    // Converge rejects when scene or camera change, so pause interaction.
-    this.loop.stop();
+    if (this.exporting) throw new Error('A render is already in progress');
+    if (signal?.aborted) throw new DOMException('Render cancelled', 'AbortError');
+    this.exporting = true;
     this.controls.enabled = false;
+    useRenderInfo.setState({ offline: { samples: 0, target: samples, stage: 'preparing' } });
+    let render: Render | undefined;
     try {
+      await this.ensureTracer();
+      if (this.disposed || signal?.aborted) throw new DOMException('Render cancelled', 'AbortError');
+      const engine = this.engine!;
+      this.loop!.stop();
+      this.updateLight();
+      this.updateGround();
+      const config = this.config!;
+      const output = render = new Render(engine, {
+        width,
+        height,
+        bounces: config.bounces,
+        maxSamples: samples
+      });
+      const denoiser = this.denoiserOptions('export');
       if (denoiser) {
-        await render.setDenoiser(denoiser).catch(() => render.setDenoiser({ type: 'jnlm' }));
+        await output.setDenoiser(denoiser).catch(() => output.setDenoiser({ type: 'jnlm' }));
       }
-      useRenderInfo.setState({ offline: { samples: 0, target: samples, stage: 'preparing' } });
-      this.sync.update();
-      this.engine.update();
+      this.sync!.update();
+      engine.update();
       await render.converge({
         samples,
         samplesPerBatch: 4,
@@ -724,14 +897,13 @@ export class PaperRenderer {
           useRenderInfo.setState({ offline: { samples: done, target: targetSamples, stage } });
         }
       });
-      return await this.composite(await this.engine.display.toBlob(render));
+      return await this.composite(await engine.display.toBlob(render));
     }
     finally {
-      render.dispose();
+      render?.dispose();
+      this.exporting = false;
       this.controls.enabled = true;
-      if (!this.disposed) {
-        this.loop.start();
-      }
+      if (!this.disposed) void this.updateMode();
       useRenderInfo.setState({ offline: undefined });
     }
   }
@@ -743,13 +915,31 @@ export class PaperRenderer {
 
   dispose() {
     this.disposed = true;
+    this.generation++;
     clearTimeout(this.generateTimer);
     this.unsubscribers.forEach(fn => fn());
     this.resizeObserver.disconnect();
-    this.loop.dispose();
-    this.sync.dispose();
+    this.raster.setAnimationLoop(null);
+    this.loop?.dispose();
+    this.sync?.dispose();
     this.controls.dispose();
-    this.engine.dispose();
+    this.engine?.dispose();
+    this.composer.passes.forEach(pass => pass.dispose());
+    this.composer.dispose();
+    this.raster.dispose();
+    this.rasterKey.shadow.dispose();
+    this.paperGroup.traverse(object => {
+      if (object instanceof THREE.Mesh && !(object instanceof THREE.InstancedMesh)) object.geometry.dispose();
+      if (object instanceof THREE.InstancedMesh) object.dispose();
+    });
+    this.prototypes.forEach(geometry => geometry.dispose());
+    [...this.paperMaterials, ...this.cardMaterials].forEach(material => material.dispose());
+    this.ground.geometry.dispose();
+    this.ground.material.dispose();
+    this.shadowGround.material.dispose();
+    this.normalMap.dispose();
+    this.textures.forEach(texture => texture.dispose());
+    this.traceCanvas?.remove();
     this.canvas.remove();
   }
 }
