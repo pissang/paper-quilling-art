@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { Engine, Render, RenderLoop, THREESync, type DenoiserOptions } from '@meimu/mutracer';
-import { ENVIRONMENTS, MAX_COLORS, type Config, type RGB } from '../config';
+import { MAX_COLORS, type Config, type RGB } from '../config';
 import { useConfig, useRenderInfo, type RenderPhase } from '../store';
 import {
   BOX_SIZE, assignColors, createMask, generateStrips, groupHeights, mergeStrips, setExtrudeHeight,
@@ -10,7 +9,13 @@ import {
 } from './generate';
 import { extrudePolyline } from 'geometry-extrude';
 
-const LIGHT_DISTANCE = 30;
+/** Beyond the orbit controls' max distance so the camera never passes a light. */
+const LIGHT_DISTANCE = 150;
+/** Angular size of the fill and sky lights in degrees. */
+const FILL_ANGLE = 50;
+const SKY_ANGLE = 100;
+const FILL_COLOR: RGB = [196, 214, 255];
+const SKY_COLOR: RGB = [236, 241, 255];
 const PAPER_UV_SCALE = 1.5;
 const GROUND_UV_SCALE = 0.35;
 
@@ -23,8 +28,7 @@ const OUTLINE_GEOMETRY_KEYS: Keys = ['outlineThickness', 'outlineHeight'];
 const MATERIAL_KEYS: Keys = ['paperRoughness', 'paperTexture', 'bumpScale', 'translucency', 'bevel', 'colors', 'outlineColor'];
 const VISIBILITY_KEYS: Keys = ['paperVisible', 'outlineVisible'];
 const GROUND_KEYS: Keys = ['showPlane', 'planeColor', 'shadowColor', 'shadowIntensity', 'backgroundColor'];
-const LIGHT_KEYS: Keys = ['lightDirection', 'lightIntensity', 'lightSoftness'];
-const ENV_KEYS: Keys = ['environment', 'environmentIntensity'];
+const LIGHT_KEYS: Keys = ['lightDirection', 'lightIntensity', 'lightSoftness', 'lightColor', 'fillIntensity', 'skyIntensity'];
 const DISPLAY_KEYS: Keys = ['exposure', 'toneMapping', 'contrast', 'saturation', 'vignette', 'bloom'];
 const RENDER_KEYS: Keys = ['maxSamples', 'bounces', 'denoise', 'liveDenoise'];
 
@@ -66,13 +70,14 @@ export class PaperRenderer {
   private paperMeshes: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>[] = [];
   private outlineMesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   private ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
-  private sun: THREE.RectAreaLight;
-  private ambient = new THREE.AmbientLight(0xffffff, 0);
+  // Analytic area lights only: no environment map or ambient term.
+  private keyLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
+  private fillLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
+  private skyLight = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
 
   private textureLoader = new THREE.TextureLoader();
   private textures = new Map<string, THREE.Texture>();
   private normalMap: THREE.Texture;
-  private environments = new Map<string, Promise<{ texture: THREE.DataTexture; source: Float32Array }>>();
 
   private config: Config | null = null;
   private mask: Mask | null = null;
@@ -110,9 +115,7 @@ export class PaperRenderer {
     );
     this.content.add(this.ground);
 
-    this.sun = new THREE.RectAreaLight(0xffffff, 1, 1, 1);
-    this.scene.add(this.sun);
-    this.scene.add(this.ambient);
+    this.scene.add(this.keyLight, this.fillLight, this.skyLight);
 
     this.normalMap = this.textureLoader.load('./img/paper-normal.jpg');
 
@@ -273,9 +276,6 @@ export class PaperRenderer {
     }
     if (changed(prev, next, LIGHT_KEYS)) {
       this.updateLight();
-    }
-    if (changed(prev, next, ENV_KEYS)) {
-      this.updateEnvironment();
     }
     if (changed(prev, next, DISPLAY_KEYS)) {
       this.updateDisplay();
@@ -462,54 +462,43 @@ export class PaperRenderer {
     this.container.style.backgroundColor = `rgb(${config.backgroundColor.join(',')})`;
   }
 
+  /**
+   * Places a square area light at `direction`, sized to `angle` degrees as seen
+   * from the artwork, with radiance chosen so its irradiance is `irradiance`.
+   */
+  private placeLight(light: THREE.RectAreaLight, direction: THREE.Vector3, angle: number,
+    irradiance: number, color: RGB) {
+    const dir = direction.clone().normalize();
+    light.position.copy(dir).multiplyScalar(LIGHT_DISTANCE);
+    light.lookAt(0, 0, 0);
+    const halfTan = Math.tan(THREE.MathUtils.degToRad(angle) / 2);
+    light.width = light.height = 2 * LIGHT_DISTANCE * halfTan;
+    // Irradiance at the centre of a facing square emitter of radiance L is
+    // E = 4L·t·atan(t) with t = tanHalf / sqrt(1 + tanHalf²), which reduces to
+    // L·A/d² for small lights but stays exact for the wide sky panel.
+    const t = halfTan / Math.sqrt(1 + halfTan * halfTan);
+    light.intensity = irradiance / (4 * t * Math.atan(t));
+    setColor(light.color, color);
+    light.visible = irradiance > 0;
+  }
+
   private updateLight() {
     const config = this.config!;
     const [dx, dy] = config.lightDirection;
-    // The light sits above (dx, dy) of the artwork, whose Y axis maps to world -Z.
-    const dir = new THREE.Vector3(dx, 1, -dy).normalize();
-    this.sun.position.copy(dir).multiplyScalar(LIGHT_DISTANCE);
-    this.sun.lookAt(0, 0, 0);
-    const angle = THREE.MathUtils.degToRad(Math.max(config.lightSoftness, 0.2));
-    const size = 2 * LIGHT_DISTANCE * Math.tan(angle / 2);
-    this.sun.width = this.sun.height = size;
-    // Keep irradiance constant while the softness (light size) changes.
-    this.sun.intensity = config.lightIntensity * LIGHT_DISTANCE * LIGHT_DISTANCE / (size * size);
-  }
+    // The key light sits above (dx, dy) of the artwork, whose Y axis maps to world -Z.
+    const key = new THREE.Vector3(dx, 1, -dy);
+    this.placeLight(this.keyLight, key, Math.max(config.lightSoftness, 0.2), config.lightIntensity, config.lightColor);
 
-  private loadEnvironment(name: keyof typeof ENVIRONMENTS) {
-    let promise = this.environments.get(name);
-    if (!promise) {
-      const loader = new HDRLoader().setDataType(THREE.FloatType);
-      promise = loader.loadAsync(ENVIRONMENTS[name]).then(texture => {
-        texture.mapping = THREE.EquirectangularReflectionMapping;
-        const source = (texture.image.data as Float32Array).slice();
-        return { texture, source };
-      });
-      this.environments.set(name, promise);
+    // Fill comes low from the opposite side to lift the shadow side of the strips.
+    const horizontal = new THREE.Vector3(-dx, 0, dy);
+    if (horizontal.lengthSq() < 1e-4) {
+      horizontal.set(1, 0, 1);
     }
-    return promise;
-  }
+    horizontal.normalize();
+    this.placeLight(this.fillLight, horizontal.setY(0.8), FILL_ANGLE, config.fillIntensity, FILL_COLOR);
 
-  private async updateEnvironment() {
-    const { environment, environmentIntensity } = this.config!;
-    if (environment === 'none') {
-      this.scene.environment = null;
-      this.ambient.intensity = environmentIntensity * 0.5;
-      return;
-    }
-    const { texture, source } = await this.loadEnvironment(environment);
-    const current = this.config!;
-    if (current.environment !== environment || current.environmentIntensity !== environmentIntensity) {
-      return;
-    }
-    // MuTracer has no environment intensity, so scale the radiance data.
-    const data = texture.image.data as Float32Array;
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (i & 3) === 3 ? source[i] : source[i] * environmentIntensity;
-    }
-    texture.needsUpdate = true;
-    this.ambient.intensity = 0;
-    this.scene.environment = texture;
+    // A broad overhead panel stands in for skylight; nudged off the pole so lookAt stays stable.
+    this.placeLight(this.skyLight, new THREE.Vector3(0.001, 1, 0.001), SKY_ANGLE, config.skyIntensity, SKY_COLOR);
   }
 
   private updateDisplay() {

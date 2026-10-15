@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { ActionIcon, Group, ScrollArea, Tabs, Title, Tooltip } from '@mantine/core';
-import { IconArrowBackUp, IconArrowForwardUp, IconRefresh } from '@tabler/icons-react';
+import { useState, type ComponentType } from 'react';
+import { ActionIcon, Group, ScrollArea, Tooltip, UnstyledButton } from '@mantine/core';
+import {
+  IconAdjustmentsHorizontal, IconArrowBackUp, IconArrowForwardUp, IconBrush, IconCube, IconLetterCase, IconRefresh
+} from '@tabler/icons-react';
 import { useConfig } from '../store';
 import { DesignPanel } from './panels/DesignPanel';
 import { MaskPanel } from './panels/MaskPanel';
@@ -8,11 +10,11 @@ import { ScenePanel } from './panels/ScenePanel';
 import { RenderPanel } from './panels/RenderPanel';
 import { RenderFooter } from './RenderFooter';
 
-const TABS = [
-  { value: 'design', label: 'Design', panel: DesignPanel },
-  { value: 'shape', label: 'Shape', panel: MaskPanel },
-  { value: 'scene', label: 'Scene', panel: ScenePanel },
-  { value: 'render', label: 'Render', panel: RenderPanel }
+const TABS: { value: string; label: string; icon: ComponentType<{ size?: number; stroke?: number }>; panel: ComponentType }[] = [
+  { value: 'design', label: 'Design', icon: IconBrush, panel: DesignPanel },
+  { value: 'shape', label: 'Shape', icon: IconLetterCase, panel: MaskPanel },
+  { value: 'scene', label: 'Scene', icon: IconCube, panel: ScenePanel },
+  { value: 'render', label: 'Render', icon: IconAdjustmentsHorizontal, panel: RenderPanel }
 ];
 
 function History() {
@@ -22,17 +24,17 @@ function History() {
   return (
     <Group gap={2}>
       <Tooltip label="Undo (⌘Z)">
-        <ActionIcon variant="subtle" color="gray" aria-label="Undo" disabled={!canUndo} onClick={undo}>
+        <ActionIcon aria-label="Undo" disabled={!canUndo} onClick={undo}>
           <IconArrowBackUp size={18} />
         </ActionIcon>
       </Tooltip>
       <Tooltip label="Redo (⇧⌘Z)">
-        <ActionIcon variant="subtle" color="gray" aria-label="Redo" disabled={!canRedo} onClick={redo}>
+        <ActionIcon aria-label="Redo" disabled={!canRedo} onClick={redo}>
           <IconArrowForwardUp size={18} />
         </ActionIcon>
       </Tooltip>
       <Tooltip label="Reset all settings">
-        <ActionIcon variant="subtle" color="gray" aria-label="Reset all settings" onClick={reset}>
+        <ActionIcon aria-label="Reset all settings" onClick={reset}>
           <IconRefresh size={18} />
         </ActionIcon>
       </Tooltip>
@@ -40,28 +42,52 @@ function History() {
   );
 }
 
+function Logo() {
+  return (
+    <svg className="logo" viewBox="0 0 32 32" aria-hidden>
+      <rect width="32" height="32" rx="8" fill="var(--mantine-color-clay-5)" />
+      <path d="M16 8a8 8 0 1 0 8 8" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M16 12a4 4 0 1 0 4 4" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" opacity=".75" />
+      <circle cx="16" cy="16" r="1.4" fill="#fff" />
+    </svg>
+  );
+}
+
 export function Sidebar() {
-  const [tab, setTab] = useState<string | null>('design');
+  const [tab, setTab] = useState('design');
+  const Panel = TABS.find(t => t.value === tab)!.panel;
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">
-        <Group justify="space-between">
-          <Title order={5} fw={600}>Paper Quilling</Title>
-          <History />
+      <header className="sidebar-header">
+        <Group gap={10} wrap="nowrap">
+          <Logo />
+          <div>
+            <div className="app-title">Paper Quilling</div>
+            <div className="app-subtitle">Path traced in your browser</div>
+          </div>
         </Group>
-      </div>
-      <Tabs value={tab} onChange={setTab} className="sidebar-tabs" keepMounted={false}>
-        <Tabs.List grow px={8}>
-          {TABS.map(t => <Tabs.Tab key={t.value} value={t.value}>{t.label}</Tabs.Tab>)}
-        </Tabs.List>
-        <ScrollArea className="sidebar-scroll" type="hover" scrollbarSize={6}>
-          {TABS.map(({ value, panel: Panel }) => (
-            <Tabs.Panel key={value} value={value} p={16}>
-              <Panel />
-            </Tabs.Panel>
-          ))}
-        </ScrollArea>
-      </Tabs>
+        <History />
+      </header>
+      <nav className="tab-bar" role="tablist">
+        {TABS.map(({ value, label, icon: Icon }) => (
+          <UnstyledButton
+            key={value}
+            role="tab"
+            aria-selected={tab === value}
+            className="tab"
+            data-active={tab === value || undefined}
+            onClick={() => setTab(value)}
+          >
+            <Icon size={17} stroke={1.7} />
+            <span>{label}</span>
+          </UnstyledButton>
+        ))}
+      </nav>
+      <ScrollArea className="sidebar-scroll" type="scroll" scrollbarSize={6} offsetScrollbars>
+        <div className="sidebar-content" role="tabpanel">
+          <Panel />
+        </div>
+      </ScrollArea>
       <RenderFooter />
     </aside>
   );

@@ -4,13 +4,6 @@ export type RGB = [number, number, number];
 
 export const MAX_COLORS = 7;
 
-export const ENVIRONMENTS = {
-  canyon: './img/canyon.hdr',
-  hall: './img/hall.hdr',
-  pisa: './img/pisa.hdr'
-} as const;
-export type EnvironmentName = keyof typeof ENVIRONMENTS | 'none';
-
 export const PAPER_TEXTURES = {
   'paper-detail': './img/paper-detail.png',
   'cream-paper': './img/cream-paper-subtle-pattern.jpg',
@@ -63,9 +56,13 @@ export interface Config {
   /** Horizontal offset of the light seen from above, in [-1, 1]. */
   lightDirection: [number, number];
   lightIntensity: number;
+  /** Angular size of the key light in degrees. */
   lightSoftness: number;
-  environment: EnvironmentName;
-  environmentIntensity: number;
+  lightColor: RGB;
+  /** Cool fill from the opposite side. */
+  fillIntensity: number;
+  /** Broad overhead panel. */
+  skyIntensity: number;
 
   // Camera
   spinAngle: number;
@@ -135,10 +132,11 @@ export function createDefaultConfig(): Config {
     shadowIntensity: 0.8,
 
     lightDirection: [-0.3, 0.4],
-    lightIntensity: 2.5,
-    lightSoftness: 6,
-    environment: 'canyon',
-    environmentIntensity: 0.6,
+    lightIntensity: 2.6,
+    lightSoftness: 8,
+    lightColor: [255, 241, 222],
+    fillIntensity: 0.45,
+    skyIntensity: 0.6,
 
     spinAngle: 0,
     fov: 40,

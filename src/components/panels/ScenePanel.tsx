@@ -1,13 +1,15 @@
 import { useRef } from 'react';
 import { Group, Stack } from '@mantine/core';
-import { PAPER_TEXTURES } from '../../config';
+import { IconBulb, IconLayoutBoard, IconTexture } from '@tabler/icons-react';
+import { PAPER_TEXTURES, rgbToHex } from '../../config';
 import { setConfig, useConfigValue } from '../../store';
-import { ChoiceField, ColorField, Section, SliderField, SwitchField } from '../fields';
+import { ColorButton, ColorField, Note, Section, SelectField, SliderField, SwitchField } from '../fields';
 
 const PAD_RANGE = 1;
 
 function DirectionPad() {
   const [x, y] = useConfigValue('lightDirection');
+  const color = useConfigValue('lightColor');
   const ref = useRef<HTMLDivElement>(null);
 
   const update = (e: React.PointerEvent) => {
@@ -22,32 +24,69 @@ function DirectionPad() {
     setConfig({ lightDirection: [+dx.toFixed(3), +dy.toFixed(3)] });
   };
 
+  const left = (x / PAD_RANGE + 1) * 50;
+  const top = (1 - y / PAD_RANGE) * 50;
   return (
     <div
-      ref={ref}
-      className="direction-pad"
-      title="Drag to move the light"
-      onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); update(e); }}
-      onPointerMove={e => e.buttons && update(e)}
-    >
-      <div
-        className="direction-pad-handle"
-        style={{ left: `${(x / PAD_RANGE + 1) * 50}%`, top: `${(1 - y / PAD_RANGE) * 50}%` }}
-      />
+        ref={ref}
+        className="direction-pad"
+        title="Drag to move the key light"
+        onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); update(e); }}
+        onPointerMove={e => e.buttons && update(e)}
+        onDoubleClick={() => setConfig({ lightDirection: [0, 0] })}
+      >
+        {/* Shadow cast by the light, pointing away from it. */}
+        <div className="direction-pad-shadow" style={{ left: `${100 - left}%`, top: `${100 - top}%` }} />
+        <div className="direction-pad-center" />
+        <div
+          className="direction-pad-handle"
+          style={{ left: `${left}%`, top: `${top}%`, background: rgbToHex(color), boxShadow: `0 0 14px ${rgbToHex(color)}` }}
+        />
     </div>
   );
 }
 
+function KeyLightInfo() {
+  const [x, y] = useConfigValue('lightDirection');
+  const color = useConfigValue('lightColor');
+  const elevation = Math.round(90 - Math.atan(Math.hypot(x, y)) * 180 / Math.PI);
+  const azimuth = Math.round((Math.atan2(x, y) * 180 / Math.PI + 360) % 360);
+  return (
+    <Stack gap={8} style={{ flex: 1, minWidth: 0 }}>
+      <span className="subsection">Key light</span>
+      <div className="readout">
+        <span>Elevation</span><b>{elevation}°</b>
+        <span>Azimuth</span><b>{Math.hypot(x, y) < 0.01 ? '–' : `${azimuth}°`}</b>
+      </div>
+      <ColorButton value={color} label="Key light color" onChange={rgb => setConfig({ lightColor: rgb })} />
+      <span className="pad-caption">Drag the sun · double-click to center</span>
+    </Stack>
+  );
+}
+
 export function ScenePanel() {
-  const environment = useConfigValue('environment');
   const showPlane = useConfigValue('showPlane');
   return (
-    <Stack gap={22}>
-      <Section title="Paper">
-        <ChoiceField
+    <Stack gap={12}>
+      <Section title="Light" icon={<IconBulb size={15} />}>
+        <Group gap={14} wrap="nowrap" align="flex-start" mb={4}>
+          <DirectionPad />
+          <KeyLightInfo />
+        </Group>
+        <SliderField name="lightIntensity" label="Key" min={0} max={8} step={0.1} />
+        <SliderField name="lightSoftness" label="Key size" min={0.5} max={40} step={0.5}
+          format={v => `${v}°`} hint="Angular size of the key light. Larger lights cast softer shadows." />
+        <SliderField name="fillIntensity" label="Fill" min={0} max={3} step={0.05}
+          hint="Large cool light from the opposite side that lifts the shadows." />
+        <SliderField name="skyIntensity" label="Sky" min={0} max={3} step={0.05}
+          hint="Broad overhead panel for soft top light." />
+        <Note>All lights are analytic area lights; there is no environment map.</Note>
+      </Section>
+
+      <Section title="Paper" icon={<IconTexture size={15} />}>
+        <SelectField
           name="paperTexture"
           label="Texture"
-          variant="select"
           data={[
             { value: '', label: 'None' },
             { value: PAPER_TEXTURES['paper-detail'], label: 'Fibre' },
@@ -63,39 +102,15 @@ export function ScenePanel() {
           hint="Rounds strip edges in shading only." />
       </Section>
 
-      <Section title="Light">
-        <Group gap="md" wrap="nowrap" align="center">
-          <DirectionPad />
-          <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
-            <SliderField name="lightIntensity" label="Sun" min={0} max={8} step={0.1} />
-            <SliderField name="lightSoftness" label="Softness" min={0.5} max={40} step={0.5}
-              format={v => `${v}°`} hint="Angular size of the light. Larger lights cast softer shadows." />
-          </Stack>
-        </Group>
-        <ChoiceField
-          name="environment"
-          label="Environment"
-          variant="select"
-          data={[
-            { value: 'canyon', label: 'Canyon' },
-            { value: 'hall', label: 'Hall' },
-            { value: 'pisa', label: 'Pisa' },
-            { value: 'none', label: 'Uniform' }
-          ]}
-        />
-        <SliderField name="environmentIntensity" label={environment === 'none' ? 'Ambient' : 'Env strength'}
-          min={0} max={3} step={0.05} />
-      </Section>
-
-      <Section title="Ground">
+      <Section title="Ground" icon={<IconLayoutBoard size={15} />}>
         <SwitchField name="showPlane" label="Paper board"
           hint="Turn off to render only the shadows over the background color." />
         {showPlane
-          ? <ColorField name="planeColor" label="Board color" />
+          ? <ColorField name="planeColor" label="Board" />
           : (
             <>
-              <ColorField name="shadowColor" label="Shadow color" />
-              <SliderField name="shadowIntensity" label="Shadow" min={0} max={1} step={0.01} />
+              <ColorField name="shadowColor" label="Shadow" />
+              <SliderField name="shadowIntensity" label="Opacity" min={0} max={1} step={0.01} />
             </>
           )}
         <ColorField name="backgroundColor" label="Background" />

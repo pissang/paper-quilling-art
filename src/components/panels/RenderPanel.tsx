@@ -1,15 +1,15 @@
 import { Button, Group, Stack } from '@mantine/core';
-import { IconFocusCentered, IconRotate2 } from '@tabler/icons-react';
+import { IconAperture, IconCamera, IconFocusCentered, IconRotate2, IconSparkles } from '@tabler/icons-react';
 import { useRenderer } from '../../RendererContext';
 import { setConfig, useConfigValue } from '../../store';
-import { ChoiceField, Note, Section, SliderField, SwitchField } from '../fields';
+import { Note, Section, SelectField, SliderField, SwitchField } from '../fields';
 
 export function RenderPanel() {
   const renderer = useRenderer();
   const denoise = useConfigValue('denoise');
   return (
-    <Stack gap={22}>
-      <Section title="Camera">
+    <Stack gap={12}>
+      <Section title="Camera" icon={<IconCamera size={15} />}>
         <SliderField name="spinAngle" label="Spin" min={-Math.PI} max={Math.PI} step={0.01}
           format={v => `${Math.round(v * 180 / Math.PI)}°`} hint="Rotate the artwork. You can also right-drag in the viewport." />
         <SliderField name="fov" label="Field of view" min={10} max={80} step={1} format={v => `${v}°`} />
@@ -25,11 +25,10 @@ export function RenderPanel() {
         </Group>
       </Section>
 
-      <Section title="Look">
-        <ChoiceField
+      <Section title="Look" icon={<IconAperture size={15} />}>
+        <SelectField
           name="toneMapping"
           label="Tone map"
-          variant="select"
           data={[
             { value: 'agx', label: 'AgX' },
             { value: 'aces', label: 'ACES' },
@@ -45,7 +44,7 @@ export function RenderPanel() {
         <SliderField name="bloom" label="Bloom" min={0} max={1} step={0.01} />
       </Section>
 
-      <Section title="Path tracing">
+      <Section title="Path tracing" icon={<IconSparkles size={15} />}>
         <SliderField name="maxSamples" label="Samples" min={16} max={4096} step={16}
           hint="Samples per pixel accumulated in the viewport before it stops." />
         <SliderField name="bounces" label="Bounces" min={1} max={12} step={1} />

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ActionIcon, Group, Image, SegmentedControl, Stack, Text, TextInput } from '@mantine/core';
 import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone';
-import { IconPhotoUp, IconX } from '@tabler/icons-react';
+import { IconBorderOuter, IconLetterCase, IconPhotoUp, IconX } from '@tabler/icons-react';
 import { setConfig, useConfigValue } from '../../store';
-import { ChoiceField, ColorField, Note, Section, SliderField, SwitchField } from '../fields';
+import { ColorField, Note, Section, SelectField, SliderField, SwitchField } from '../fields';
 
 type MaskMode = 'none' | 'text' | 'image';
 
@@ -55,8 +55,8 @@ export function MaskPanel() {
   const hasMask = mode !== 'none' && (mode === 'text' ? !!maskText : !!maskImage);
 
   return (
-    <Stack gap={22}>
-      <Section title="Shape">
+    <Stack gap={12}>
+      <Section title="Shape" icon={<IconLetterCase size={15} />}>
         <SegmentedControl
           size="xs"
           fullWidth
@@ -73,8 +73,8 @@ export function MaskPanel() {
         )}
         {mode === 'text' && (
           <>
-            <TextInput size="xs" placeholder="Type a word" value={text} onChange={e => setText(e.currentTarget.value)} />
-            <ChoiceField name="maskTextFont" label="Font" data={FONTS} variant="select" />
+            <TextInput size="sm" placeholder="Type a word" value={text} onChange={e => setText(e.currentTarget.value)} />
+            <SelectField name="maskTextFont" label="Font" data={FONTS} />
             <SliderField name="maskTextSize" label="Size" min={20} max={240} step={2} />
           </>
         )}
@@ -82,7 +82,7 @@ export function MaskPanel() {
           maskImage
             ? (
               <Group gap="sm" wrap="nowrap" align="flex-start">
-                <Image src={maskImage} w={96} h={96} fit="contain" radius="sm" bg="white" />
+                <Image src={maskImage} w={88} h={88} fit="contain" radius="md" bg="white" className="mask-thumb" />
                 <Stack gap={6} style={{ flex: 1 }}>
                   <Note>Dark areas become the shape. Drop another image to replace it.</Note>
                   <ActionIcon variant="light" color="red" size="sm" aria-label="Remove image" onClick={() => setConfig({ maskImage: '' })}>
@@ -92,9 +92,9 @@ export function MaskPanel() {
               </Group>
             )
             : (
-              <Dropzone onDrop={onDrop} accept={IMAGE_MIME_TYPE} maxFiles={1} p="md">
+              <Dropzone onDrop={onDrop} accept={IMAGE_MIME_TYPE} maxFiles={1} p="md" radius="md" className="dropzone">
                 <Group justify="center" gap="sm" mih={80} style={{ pointerEvents: 'none' }}>
-                  <IconPhotoUp size={28} stroke={1.5} />
+                  <IconPhotoUp size={28} stroke={1.5} color="var(--mantine-color-clay-4)" />
                   <div>
                     <Text size="sm">Drop an image here</Text>
                     <Text size="xs" c="dimmed">Dark shapes on a light background work best</Text>
@@ -105,8 +105,8 @@ export function MaskPanel() {
         )}
       </Section>
 
-      <Section title="Outline">
-        <SwitchField name="outlineVisible" label="Visible" />
+      <Section title="Outline" icon={<IconBorderOuter size={15} />}>
+        <SwitchField name="outlineVisible" label="Show outline" />
         <SliderField name="outlineThickness" label="Thickness" min={0.01} max={0.2} step={0.005} />
         <SliderField name="outlineHeight" label="Height" min={0.1} max={3} step={0.05} />
         <ColorField name="outlineColor" label="Color" />

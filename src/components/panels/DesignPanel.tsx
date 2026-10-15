@@ -1,8 +1,8 @@
-import { ActionIcon, Button, Group, Popover, SimpleGrid, Stack, Tooltip } from '@mantine/core';
-import { IconArrowsShuffle, IconDice5, IconPalette, IconSwitchVertical } from '@tabler/icons-react';
+import { ActionIcon, Button, Group, Popover, SimpleGrid, Stack, Tooltip, UnstyledButton } from '@mantine/core';
+import { IconArrowsShuffle, IconDice5, IconPalette, IconColorSwatch, IconSwitchVertical, IconWaveSine } from '@tabler/icons-react';
 import { MAX_COLORS, PALETTES, paletteColors, rgbToHex, type Palette, type RGB } from '../../config';
 import { setConfig, useConfig, useConfigValue } from '../../store';
-import { RgbInput, Section, SliderField, SwitchField } from '../fields';
+import { ColorPopover, Note, Section, SliderField, SwitchField } from '../fields';
 
 function gradient(palette: Palette) {
   const stops = Array.from({ length: 8 }, (_, i) => palette.sample(1 - i / 7));
@@ -11,22 +11,23 @@ function gradient(palette: Palette) {
 
 function PalettePicker() {
   return (
-    <Popover width={300} position="bottom-end" shadow="md" withArrow>
+    <Popover width={280} position="bottom-end" withArrow>
       <Popover.Target>
-        <Tooltip label="Pick a palette">
-          <ActionIcon variant="subtle" color="gray" size="sm" aria-label="Pick a palette"><IconPalette size={16} /></ActionIcon>
+        <Tooltip label="Palettes">
+          <ActionIcon size="sm" aria-label="Pick a palette"><IconPalette size={16} /></ActionIcon>
         </Tooltip>
       </Popover.Target>
-      <Popover.Dropdown>
-        <SimpleGrid cols={2} spacing={8}>
+      <Popover.Dropdown p={10}>
+        <SimpleGrid cols={2} spacing={8} verticalSpacing={8}>
           {PALETTES.map(palette => (
-            <Tooltip key={palette.name} label={palette.name} openDelay={400}>
-              <div
-                className="palette-swatch"
-                style={{ background: gradient(palette) }}
-                onClick={() => setConfig({ colors: paletteColors(palette) })}
-              />
-            </Tooltip>
+            <UnstyledButton
+              key={palette.name}
+              className="palette-option"
+              onClick={() => setConfig({ colors: paletteColors(palette) })}
+            >
+              <span className="palette-gradient" style={{ background: gradient(palette) }} />
+              <span className="palette-name">{palette.name}</span>
+            </UnstyledButton>
           ))}
         </SimpleGrid>
       </Popover.Dropdown>
@@ -34,7 +35,7 @@ function PalettePicker() {
   );
 }
 
-function ColorList() {
+function ColorStrip() {
   const colors = useConfigValue('colors');
   const colorNumber = useConfigValue('colorNumber');
 
@@ -45,18 +46,19 @@ function ColorList() {
   };
 
   return (
-    <Stack gap={6}>
-      <div style={{ display: 'flex', height: 26, borderRadius: 8, overflow: 'hidden' }}>
-        {colors.slice(0, colorNumber).map((c, i) => (
-          <div key={i} style={{ flex: 1, background: rgbToHex(c) }} />
-        ))}
-      </div>
-      <SimpleGrid cols={2} spacing={6} verticalSpacing={6}>
-        {colors.slice(0, colorNumber).map((color, idx) => (
-          <RgbInput key={idx} label={`Color ${idx + 1}`} value={color} onChange={rgb => setColor(idx, rgb)} />
-        ))}
-      </SimpleGrid>
-    </Stack>
+    <div className="color-strip">
+      {colors.slice(0, colorNumber).map((color, idx) => (
+        <ColorPopover key={idx} value={color} onChange={rgb => setColor(idx, rgb)}>
+          <button
+            type="button"
+            className="color-strip-item"
+            style={{ background: rgbToHex(color) }}
+            aria-label={`Color ${idx + 1}`}
+            title={rgbToHex(color).toUpperCase()}
+          />
+        </ColorPopover>
+      ))}
+    </div>
   );
 }
 
@@ -72,9 +74,10 @@ export function DesignPanel() {
   };
 
   return (
-    <Stack gap={22}>
+    <Stack gap={12}>
       <Section
         title="Strips"
+        icon={<IconWaveSine size={15} />}
         right={
           <Button
             size="compact-xs"
@@ -82,7 +85,7 @@ export function DesignPanel() {
             leftSection={<IconDice5 size={14} />}
             onClick={() => setConfig({ seed: Math.random() })}
           >
-            New seed
+            Shuffle
           </Button>
         }
       >
@@ -95,20 +98,21 @@ export function DesignPanel() {
         <SliderField name="thickness" label="Thickness" min={0.005} max={0.08} step={0.001} />
         <SliderField name="minHeight" label="Min height" min={0.05} max={3} step={0.05} />
         <SliderField name="maxHeight" label="Max height" min={0.05} max={3} step={0.05} />
-        <SwitchField name="paperVisible" label="Visible" />
+        <SwitchField name="paperVisible" label="Show strips" />
       </Section>
 
       <Section
         title="Colors"
+        icon={<IconColorSwatch size={15} />}
         right={
-          <Group gap={2}>
+          <Group gap={0}>
             <Tooltip label="Random palette">
-              <ActionIcon variant="subtle" color="gray" size="sm" aria-label="Random palette" onClick={randomPalette}>
+              <ActionIcon size="sm" aria-label="Random palette" onClick={randomPalette}>
                 <IconArrowsShuffle size={16} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Reverse order">
-              <ActionIcon variant="subtle" color="gray" size="sm" aria-label="Reverse colors" onClick={reverseColors}>
+              <ActionIcon size="sm" aria-label="Reverse colors" onClick={reverseColors}>
                 <IconSwitchVertical size={16} />
               </ActionIcon>
             </Tooltip>
@@ -116,10 +120,11 @@ export function DesignPanel() {
           </Group>
         }
       >
-        <SliderField name="colorNumber" label="Colors" min={1} max={MAX_COLORS} step={1} />
+        <ColorStrip />
+        <Note>Click a swatch to edit it. Each color is a layer with its own height.</Note>
+        <SliderField name="colorNumber" label="Layers" min={1} max={MAX_COLORS} step={1} />
         <SwitchField name="clusterColors" label="Group by area"
           hint="Cluster strips by position so neighbouring strips share a color and height." />
-        <ColorList />
       </Section>
     </Stack>
   );

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Badge, Button, Group, Modal, NumberInput, Progress, SegmentedControl, Stack, Text } from '@mantine/core';
+import { Button, Group, Modal, NumberInput, Progress, SegmentedControl, Stack, Text } from '@mantine/core';
 import { IconCamera, IconDownload, IconSparkles } from '@tabler/icons-react';
 import { useRenderer } from '../RendererContext';
 import { useRenderInfo, type RenderPhase } from '../store';
@@ -15,14 +15,16 @@ const PHASE_LABEL: Record<RenderPhase, string> = {
 };
 
 const PHASE_COLOR: Record<RenderPhase, string> = {
-  preparing: 'gray',
-  compiling: 'gray',
-  previewing: 'blue',
-  converging: 'teal',
-  denoising: 'grape',
-  finished: 'green',
-  error: 'red'
+  preparing: 'var(--mantine-color-dark-2)',
+  compiling: 'var(--mantine-color-dark-2)',
+  previewing: 'var(--mantine-color-blue-4)',
+  converging: 'var(--mantine-color-clay-4)',
+  denoising: 'var(--mantine-color-grape-4)',
+  finished: 'var(--mantine-color-green-5)',
+  error: 'var(--mantine-color-red-5)'
 };
+
+const BUSY_PHASES: RenderPhase[] = ['preparing', 'compiling', 'previewing', 'converging', 'denoising'];
 
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -76,12 +78,13 @@ function ExportModal({ opened, onClose }: { opened: boolean; onClose: () => void
   const progress = offline ? offline.samples / Math.max(offline.target, 1) * 100 : 0;
 
   return (
-    <Modal opened={opened} onClose={() => !busy && onClose()} title="High quality render" centered
+    <Modal opened={opened} onClose={() => !busy && onClose()} title="High quality render" centered radius="lg"
+      overlayProps={{ backgroundOpacity: 0.5, blur: 4 }}
       closeOnClickOutside={!busy} withCloseButton={!busy}>
       <Stack gap="md">
         <div>
-          <Text size="sm" mb={6}>Resolution</Text>
-          <SegmentedControl fullWidth disabled={busy} value={scale} onChange={setScale}
+          <Text size="sm" fw={500} mb={6}>Resolution</Text>
+          <SegmentedControl fullWidth disabled={busy} value={scale} onChange={setScale} color="clay"
             data={['1', '2', '3', '4'].map(s => ({ value: s, label: `${s}×` }))} />
           <Text size="xs" c="dimmed" mt={6}>{width} × {height} px, same framing as the viewport</Text>
         </div>
@@ -90,7 +93,7 @@ function ExportModal({ opened, onClose }: { opened: boolean; onClose: () => void
         {busy && (
           <Stack gap={4}>
             <Progress value={offline.stage === 'denoising' ? 100 : progress} animated
-              color={offline.stage === 'denoising' ? 'grape' : 'teal'} />
+              color={offline.stage === 'denoising' ? 'grape' : 'clay'} />
             <Text size="xs" c="dimmed">
               {offline.stage === 'denoising' ? 'Denoising…' : `${offline.samples} / ${offline.target} samples`}
             </Text>
@@ -116,30 +119,34 @@ export function RenderFooter() {
   const ready = !!renderer && !generating && phase !== 'preparing' && phase !== 'compiling' && phase !== 'error';
   const label = generating ? 'Building strips' : PHASE_LABEL[phase];
 
+  const color = generating ? 'var(--mantine-color-yellow-4)' : PHASE_COLOR[phase];
+  const busy = generating || BUSY_PHASES.includes(phase);
+
   return (
-    <div className="sidebar-footer">
-      <Stack gap={10}>
-        <Group justify="space-between" gap={6}>
-          <Group gap={6}>
-            <Badge size="sm" variant="dot" color={generating ? 'yellow' : PHASE_COLOR[phase]}>{label}</Badge>
-            {backend && <Badge size="sm" variant="light" color="gray">{backend === 'webgpu' ? 'WebGPU' : 'WebGL 2'}</Badge>}
-          </Group>
-          <Text size="xs" c="dimmed" ff="monospace">{samples} / {maxSamples} spp</Text>
-        </Group>
-        <Progress value={progress} size="xs" color={phase === 'finished' ? 'green' : 'teal'} />
-        {phase === 'error' && error && <Text size="xs" c="red" lineClamp={3}>{error}</Text>}
-        <Group grow gap="xs">
-          <Button variant="default" size="sm" leftSection={<IconCamera size={16} />} disabled={!ready}
-            onClick={async () => renderer && download(await renderer.snapshot(), `paper-quilling-${timestamp()}.png`)}>
-            Snapshot
-          </Button>
-          <Button size="sm" leftSection={<IconDownload size={16} />} disabled={!ready}
-            onClick={() => setExportOpened(true)}>
-            Render HQ
-          </Button>
-        </Group>
-      </Stack>
+    <footer className="sidebar-footer">
+      <div className="status">
+        <span className="status-dot" data-busy={busy || undefined} style={{ background: color, color }} />
+        <span className="status-label">{label}</span>
+        {backend && <span className="status-chip">{backend === 'webgpu' ? 'WebGPU' : 'WebGL 2'}</span>}
+        <span className="status-samples">
+          <b>{samples}</b> / {maxSamples} spp
+        </span>
+      </div>
+      <div className="status-progress">
+        <div style={{ width: `${progress}%`, background: color }} />
+      </div>
+      {phase === 'error' && error && <Text size="xs" c="red" lineClamp={3} mt={8}>{error}</Text>}
+      <Group grow gap={8} mt={12}>
+        <Button variant="default" leftSection={<IconCamera size={16} />} disabled={!ready}
+          onClick={async () => renderer && download(await renderer.snapshot(), `paper-quilling-${timestamp()}.png`)}>
+          Snapshot
+        </Button>
+        <Button leftSection={<IconDownload size={16} />} disabled={!ready}
+          onClick={() => setExportOpened(true)}>
+          Render HQ
+        </Button>
+      </Group>
       <ExportModal opened={exportOpened} onClose={() => setExportOpened(false)} />
-    </div>
+    </footer>
   );
 }

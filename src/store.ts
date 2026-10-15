@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createDefaultConfig, type Config } from './config';
 
 const STORAGE_KEY = 'paper-quilling-config';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const HISTORY_LIMIT = 50;
 /** Edits closer together than this merge into one undo step (slider drags). */
 const HISTORY_MERGE_MS = 400;
